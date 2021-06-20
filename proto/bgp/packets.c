@@ -794,6 +794,29 @@ bgp_create_open(struct bgp_conn *conn, byte *buf)
   return buf;
 }
 
+// own extension
+static byte *
+bgp_create_availability_notify(struct bgp_conn *conn, byte *buf)
+{
+	// hardcoded info about availability
+	int availability_info = 999;
+	struct bgp_proto *p = conn->bgp;
+
+	BGP_TRACE(D_PACKETS, "Sending AVAILABILITY NOTIFY(ver=%d,as=%d,hold=%d,id=%08x)",
+			BGP_VERSION, p->public_as, p->cf->hold_time, p->local_id);
+
+	buf[0] = BGP_VERSION;
+	put_u16(buf+1, (p->public_as < 0xFFFF) ? p->public_as : AS_TRANS);
+	put_u16(buf+3, p->cf->hold_time);
+	put_u32(buf+5, p->local_id);
+
+	buf[9] = availability_info;
+
+	log(L_INFO "! AVNO Packet 815: %x", buf);
+
+	return buf + 10;
+}
+// end
 static void
 bgp_rx_open(struct bgp_conn *conn, byte *pkt, uint len)
 {
@@ -2757,7 +2780,10 @@ bgp_send(struct bgp_conn *conn, uint type, uint len)
   memset(buf, 0xff, 16);		/* Marker */
   put_u16(buf+16, len);
   buf[18] = type;
-
+  //log(L_INFO "! bgp_send 2783: sending packet of type: %u content: %x , len: %u", type, *(sk->tbuf), len);
+  log(L_INFO "! bgp_send 2784: sending packet: type: %u and len: %u\nContent:", type, len);
+  log(L_INFO "! bgp_send 2784: sending packet:\n%x %x %x %x %x %x %x %x\n%x %x %x %x %x %x %x %x\n%x %x %x %x %x %x %x %x\n%x %x %x %x %x %x %x %x\n",
+		  *(buf),*(buf+1),*(buf+2),*(buf+3),*(buf+4),*(buf+5),*(buf+6),*(buf+7),*(buf+8),*(buf+9),*(buf+10),*(buf+11),*(buf+12),*(buf+13),*(buf+14),*(buf+15),*(buf+16),*(buf+17),*(buf+18),*(buf+19),*(buf+20),*(buf+21),*(buf+22),*(buf+23),*(buf+24),*(buf+25),*(buf+26),*(buf+27),*(buf+28),*(buf+29),*(buf+30),*(buf+31),*(buf+32),*(buf+33));
   return sk_send(sk, len);
 }
 
@@ -2800,7 +2826,7 @@ bgp_fire_tx(struct bgp_conn *conn)
   }
   else if (s & (1 << PKT_OPEN))
   {
-    conn->packets_to_send &= ~(1 << PKT_OPEN);
+    conn->packets_to_send &= ~(1 << PKT_OPEN);log(L_INFO "! bgp_fire_tx: Sending HELLO. packets_to_send: %x", conn->packets_to_send);
     end = bgp_create_open(conn, pkt);
     return bgp_send(conn, PKT_OPEN, end - buf);
   }
@@ -2811,6 +2837,17 @@ bgp_fire_tx(struct bgp_conn *conn)
     bgp_start_timer(conn->keepalive_timer, conn->keepalive_time);
     return bgp_send(conn, PKT_KEEPALIVE, BGP_HEADER_LENGTH);
   }
+  // own extension
+  else if (s & (1 << PKT_AVAILABILITY_NOTIFY))
+  {
+	  //conn->packets_to_send &= ~(1 << PKT_AVAILABILITY_NOTIFY);
+	  conn->packets_to_send = 1 << PKT_AVAILABILITY_NOTIFY;
+	  log(L_INFO "! bgp_fire_tx: Sending PKT AVAILABILTY NOTIFY. packets_to_send: %x", conn->packets_to_send);
+	  end = bgp_create_availability_notify(conn, pkt);
+	  log(L_INFO "! bgp_fire_tx 2843: end: %x", end);
+	  return bgp_send(conn, PKT_AVAILABILITY_NOTIFY, 60);
+  }
+  // END
   else while (conn->channels_to_send)
   {
     c = bgp_get_channel_to_send(p, conn);

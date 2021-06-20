@@ -625,6 +625,9 @@ void bgp_update_next_hop(struct bgp_export_state *s, eattr *a, ea_list **to);
 #define PKT_NOTIFICATION	0x03
 #define PKT_KEEPALIVE		0x04
 #define PKT_ROUTE_REFRESH	0x05	/* [RFC2918] */
+//Own extension:
+#define PKT_AVAILABILITY_NOTIFY	0x10
+//END
 #define PKT_BEGIN_REFRESH	0x1e	/* Dummy type for BoRR packet [RFC7313] */
 #define PKT_SCHEDULE_CLOSE	0x1f	/* Used internally to schedule socket close */
 

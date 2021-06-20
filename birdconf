@@ -1,0 +1,21 @@
+router id 127.0.0.1;
+
+protocol kernel {
+	ipv4 {
+		export all;
+		import all;
+	};
+}
+
+protocol bgp {
+	router id 127.0.0.1;
+	local 127.0.0.1 as 555;
+	neighbor 127.0.0.2 as 554;
+	multihop;
+	ipv4 {
+		export all;
+		import all;
+		import all;
+		next hop self;
+	};
+}

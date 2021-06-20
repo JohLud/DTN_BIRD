@@ -135,6 +135,9 @@ static void bgp_active(struct bgp_proto *p);
 static void bgp_setup_conn(struct bgp_proto *p, struct bgp_conn *conn);
 static void bgp_setup_sk(struct bgp_conn *conn, sock *s);
 static void bgp_send_open(struct bgp_conn *conn);
+// Own extension
+static void bgp_send_availability_notification(struct bgp_conn *conn);
+// END
 static void bgp_update_bfd(struct bgp_proto *p, const struct bfd_options *bfd);
 
 static int bgp_incoming_connection(sock *sk, uint dummy UNUSED);
@@ -295,7 +298,9 @@ bgp_startup(struct bgp_proto *p)
     /* Apply postponed incoming connection */
     bgp_setup_conn(p, &p->incoming_conn);
     bgp_setup_sk(&p->incoming_conn, p->postponed_sk);
+    log(L_INFO "bgp.c 301, here it is sent.");
     bgp_send_open(&p->incoming_conn);
+    //bgp_send_availability_notification(&p->incoming_conn);
     p->postponed_sk = NULL;
   }
 }
@@ -959,12 +964,27 @@ bgp_send_open(struct bgp_conn *conn)
 }
 
 static void
+bgp_send_availability_notification(struct bgp_conn *conn)
+{
+	DBG("BGP: Sending availability notification\n");
+	log(L_INFO "AVNO is sent [bgp: 970]");
+	conn->sk->rx_hook = bgp_rx;
+	conn->sk->tx_hook = bgp_tx;
+	tm_stop(conn->connect_timer);
+	bgp_schedule_packet(conn, NULL, PKT_AVAILABILITY_NOTIFY);
+	//bgp_conn_set_state(conn, );
+	bgp_start_timer(conn->hold_timer, conn->bgp->cf->initial_hold_time);
+}
+
+static void
 bgp_connected(sock *sk)
 {
   struct bgp_conn *conn = sk->data;
   struct bgp_proto *p = conn->bgp;
 
   BGP_TRACE(D_EVENTS, "Connected");
+  log(L_INFO "bgp.c 984 Here it is sent.");
+  bgp_send_availability_notification(conn);
   bgp_send_open(conn);
 }
 
