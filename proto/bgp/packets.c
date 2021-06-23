@@ -2284,9 +2284,9 @@ bgp_create_mp_unreach(struct bgp_write_state *s, struct bgp_bucket *buck, byte *
 
 static byte *
 bgp_create_update(struct bgp_channel *c, byte *buf)
-{
+{ log(L_INFO "!! packet.c 2287: creating update packet.");
   struct bgp_proto *p = (void *) c->c.proto;
-  struct bgp_bucket *buck;
+  struct bgp_bucket *buck; log(L_INFO "!! packet.c 2289");
   byte *end = buf + (bgp_max_packet_length(p->conn) - BGP_HEADER_LENGTH);
   byte *res = NULL;
 
@@ -2830,7 +2830,7 @@ bgp_fire_tx(struct bgp_conn *conn)
       return bgp_send(conn, PKT_ROUTE_REFRESH, end - buf);
     }
     else if (s & (1 << PKT_UPDATE))
-    {
+    { log(L_INFO "!! packet.c 2833: update is sent.");
       end = bgp_create_update(c, pkt);
       if (end)
 	return bgp_send(conn, PKT_UPDATE, end - buf);
