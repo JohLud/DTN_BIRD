@@ -2317,7 +2317,7 @@ again: ;
   if (!EMPTY_LIST(c->bucket_queue))
   {
     buck = HEAD(c->bucket_queue);
-
+    log(L_INFO "!! packets.c 2320: bucket: %u oder %x", buck->prefixes, buck->prefixes);
     /* Cleanup empty buckets */
     if (EMPTY_LIST(buck->prefixes))
     {
