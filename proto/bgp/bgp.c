@@ -1462,7 +1462,7 @@ bgp_feed_end(struct channel *C)
   /* Schedule EoRR packet */
   if (c->feed_state == BFS_REFRESHING)
     c->feed_state = BFS_REFRESHED;
-
+  log(L_INFO "!! Feeding of packet ended. Packets to send:\n %u", p->conn->packets_to_send);;
   /* Kick TX hook */
   bgp_schedule_packet(p->conn, c, PKT_UPDATE);
 }
