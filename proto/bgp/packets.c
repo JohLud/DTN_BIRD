@@ -2317,7 +2317,8 @@ again: ;
   if (!EMPTY_LIST(c->bucket_queue))
   {
     buck = HEAD(c->bucket_queue);
-    log(L_INFO "!! packets.c 2320: bucket: %u oder %x", buck->prefixes, buck->prefixes);
+    //struct bgp_prefix *pref = HEAD(buck->prefixes); log(L_INFO "!! packets.c 2320: prefix->net_addr_length = %x", *(&(pref)->net->length));
+    //log(L_INFO "!! packets.c 2320: prefix->net_addr->data = %x %x %x %x %x %x %x", *(&(pref)->net->data)[0], *(&(pref)->net->data)[1], *(&(pref)->net->data)[2], *(&(pref)->net->data)[3], *(&(pref)->net->data)[4], *(&(pref)->net->data)[5], *(&(pref)->net->data)[6]);
     /* Cleanup empty buckets */
     if (EMPTY_LIST(buck->prefixes))
     {
