@@ -15,6 +15,14 @@
 #include "lib/resource.h"
 #include "lib/timer.h"
 
+/* Extension to specify the uptime of a network */
+struct network_up_time {
+	int start_time;
+	int up_time;
+	int period_time;
+	u32 network;
+	int network_mask;
+};
 /* Configuration structure */
 
 struct config {
@@ -60,6 +68,8 @@ struct config {
   int shutdown;				/* This is a pseudo-config for daemon shutdown */
   int gr_down;				/* This is a pseudo-config for graceful restart */
   btime load_time;			/* When we've got this configuration */
+
+  struct network_up_time *net_time;		/* extension for declaring time information for networks */
 };
 
 /* Please don't use these variables in protocols. Use proto_config->global instead. */

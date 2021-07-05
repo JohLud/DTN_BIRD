@@ -438,6 +438,17 @@ bgp_write_capabilities(struct bgp_conn *conn, byte *buf)
     data[-1] = buf - data;
   }
 
+  /*
+   * Extension for BGP DLT support
+   * later it has to be integrated clean into the capabilities list
+   */
+  *buf++ = 99;
+  *buf++ = 0;
+
+  /*
+   * End of extension
+   */
+
   caps->length = buf - buf_head;
 
   return buf;
@@ -615,7 +626,20 @@ bgp_read_capabilities(struct bgp_conn *conn, byte *pos, int len)
       caps->hostname = hostname;
 
       /* We can safely ignore all other capabilities */
+      // my insertion:
+      break;
+      /*
+       * Extension BGP DLT
+       * read extension 99 that marks support for DLT
+       */
+    case 99:
+    	log(L_INFO "!! BGP DLT Extention.");
+    	// later update caps->dlt = 1;
+    	break;
     }
+    /*
+     * End of extension
+     */
 
     ADVANCE(pos, len, 2 + cl);
   }
@@ -2284,9 +2308,9 @@ bgp_create_mp_unreach(struct bgp_write_state *s, struct bgp_bucket *buck, byte *
 
 static byte *
 bgp_create_update(struct bgp_channel *c, byte *buf)
-{ log(L_INFO "!! packet.c 2287: creating update packet.");
+{
   struct bgp_proto *p = (void *) c->c.proto;
-  struct bgp_bucket *buck; log(L_INFO "!! packet.c 2289");
+  struct bgp_bucket *buck;
   byte *end = buf + (bgp_max_packet_length(p->conn) - BGP_HEADER_LENGTH);
   byte *res = NULL;
 
@@ -2317,8 +2341,6 @@ again: ;
   if (!EMPTY_LIST(c->bucket_queue))
   {
     buck = HEAD(c->bucket_queue);
-    //struct bgp_prefix *pref = HEAD(buck->prefixes); log(L_INFO "!! packets.c 2320: prefix->net_addr_length = %x", *(&(pref)->net->length));
-    //log(L_INFO "!! packets.c 2320: prefix->net_addr->data = %x %x %x %x %x %x %x", *(&(pref)->net->data)[0], *(&(pref)->net->data)[1], *(&(pref)->net->data)[2], *(&(pref)->net->data)[3], *(&(pref)->net->data)[4], *(&(pref)->net->data)[5], *(&(pref)->net->data)[6]);
     /* Cleanup empty buckets */
     if (EMPTY_LIST(buck->prefixes))
     {
@@ -2831,7 +2853,7 @@ bgp_fire_tx(struct bgp_conn *conn)
       return bgp_send(conn, PKT_ROUTE_REFRESH, end - buf);
     }
     else if (s & (1 << PKT_UPDATE))
-    { log(L_INFO "!! packet.c 2833: update is sent.");
+    {
       end = bgp_create_update(c, pkt);
       if (end)
 	return bgp_send(conn, PKT_UPDATE, end - buf);

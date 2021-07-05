@@ -100,6 +100,8 @@ CF_KEYWORDS(TIMEFORMAT, ISO, SHORT, LONG, ROUTE, PROTOCOL, BASE, LOG, S, MS, US)
 CF_KEYWORDS(GRACEFUL, RESTART, WAIT, MAX, FLUSH, AS)
 CF_KEYWORDS(MIN, IDLE, RX, TX, INTERVAL, MULTIPLIER, PASSIVE)
 CF_KEYWORDS(CHECK, LINK)
+/* own extension for the network up time information for the bpp extension */
+CF_KEYWORDS(NETWORK_UP_TIME)
 
 /* For r_args_channel */
 CF_KEYWORDS(IPV4, IPV4_MC, IPV4_MPLS, IPV6, IPV6_MC, IPV6_MPLS, IPV6_SADR, VPN4, VPN4_MC, VPN4_MPLS, VPN6, VPN6_MC, VPN6_MPLS, ROA4, ROA6, FLOW4, FLOW6, MPLS, PRI, SEC)
@@ -127,6 +129,18 @@ CF_ENUM_PX(T_ENUM_AF, AF_, AFI_, IPV4, IPV6)
 %type <c> channel_arg
 
 CF_GRAMMAR
+
+/* own extension for the network up time information for the bgp extension */
+conf: ntwupti ;
+ntwupti:
+   NETWORK_UP_TIME NUM NUM NUM IP4 '/' NUM ';' {
+	new_config->net_time->start_time = $2;
+	new_config->net_time->up_time = $3;
+	new_config->net_time->period_time = $4;
+	new_config->net_time->network = ip4_to_u32($5);
+	new_config->net_time->network_mask = $7;
+   }
+;
 
 /* Setting of router ID */
 
