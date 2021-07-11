@@ -654,6 +654,7 @@ void bgp_update_next_hop(struct bgp_export_state *s, eattr *a, ea_list **to);
 #define BA_AS4_AGGREGATOR       0x12	/* RFC 6793 */
 #define BA_AIGP			0x1a	/* RFC 7311 */
 #define BA_LARGE_COMMUNITY	0x20	/* RFC 8092 */
+#define BA_SCHEDULED		0x99	/* BGP DLT Extension for declaring the scheduled attribute */
 
 /* Bird's private internal BGP attributes */
 #define BA_MPLS_LABEL_STACK	0xfe	/* MPLS label stack transfer attribute */

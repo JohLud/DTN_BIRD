@@ -962,6 +962,22 @@ bgp_format_mpls_label_stack(const eattr *a, byte *buf, uint size)
   pos[lnum ? -1 : 0] = 0;
 }
 
+static int
+bgp_encode_scheduled(struct bgp_write_state *s, eattr *a, byte *buf, uint size)
+{
+	/*
+	 * Will follow
+	 */
+}
+
+static void
+bgp_decode_scheduled(struct bgp_parse_state *s, uint code, uint flags, byte *data, uint len, ea_list **to)
+{
+	/*
+	 * Will follow
+	 */
+}
+
 static inline void
 bgp_decode_unknown(struct bgp_parse_state *s, uint code, uint flags, byte *data, uint len, ea_list **to)
 {
@@ -1113,6 +1129,16 @@ static const struct bgp_attr_desc bgp_attr_table[] = {
     .encode = bgp_encode_mpls_label_stack,
     .decode = bgp_decode_mpls_label_stack,
     .format = bgp_format_mpls_label_stack,
+  },
+  // extension for BGP DLT scheduled contact attribute (2 commented out, because not important for the moment)
+  [BA_SCHEDULED] = {
+	.name = "scheduled",
+	.type = EAF_TYPE_SCHEDULED,
+	.flags = BAF_OPTIONAL | BAF_TRANSITIVE,
+//	.export = bgp_export_scheduled,
+	.encode = bgp_encode_scheduled,
+	.decode = bgp_decode_scheduled,
+//	.format = bgp_format_scheduled,
   },
 };
 
