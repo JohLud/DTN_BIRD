@@ -1447,7 +1447,6 @@ rte_update2(struct channel *c, const net_addr *n, rte *new, struct rte_src *src)
   const struct filter *filter = c->in_filter;
   rte *dummy = NULL;
   net *nn;
-
   ASSERT(c->channel_state == CS_UP);
 
   rte_update_lock();
@@ -2486,19 +2485,19 @@ rt_feed_channel(struct channel *c)
   ASSERT(c->export_state == ES_FEEDING);
 
   if (!c->feed_active)
-    {
-      FIB_ITERATE_INIT(fit, &c->table->fib);
-      c->feed_active = 1;
-    }
+    	{
+      	  	  FIB_ITERATE_INIT(fit, &c->table->fib);
+      	  	  c->feed_active = 1;
+    	}
 
   FIB_ITERATE_START(&c->table->fib, fit, net, n)
     {
       rte *e = n->routes;
       if (max_feed <= 0)
-	{
-	  FIB_ITERATE_PUT(fit);
-	  return 0;
-	}
+      	  {
+    	  	  FIB_ITERATE_PUT(fit);
+    	  	  return 0;
+      	  }
 
       if ((c->ra_mode == RA_OPTIMAL) ||
 	  (c->ra_mode == RA_ACCEPTED) ||

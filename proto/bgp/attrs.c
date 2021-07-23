@@ -968,14 +968,21 @@ bgp_encode_scheduled(struct bgp_write_state *s, eattr *a, byte *buf, uint size)
 	/*
 	 * Will follow
 	 */
+
+	// puts in header	0xC0	0x99	0x02
+	//					flags	code	length
+	byte flags = a->flags;  // C0 --> optional & transitive
+	int len = bgp_put_attr_hdr3(buf, BA_SCHEDULED, flags, 2);
+	buf[3] = 0x77;
+	buf[4] = 0x77;
+	return len + 2;
+
 }
 
 static void
 bgp_decode_scheduled(struct bgp_parse_state *s, uint code, uint flags, byte *data, uint len, ea_list **to)
 {
-	/*
-	 * Will follow
-	 */
+	log(L_INFO "!! attrs.c 1066: SCHEDULED Attribute decoded. data: %x", *data);
 }
 
 static inline void
@@ -1131,10 +1138,11 @@ static const struct bgp_attr_desc bgp_attr_table[] = {
     .format = bgp_format_mpls_label_stack,
   },
   // extension for BGP DLT scheduled contact attribute (2 commented out, because not important for the moment)
+  // has id 0x99
   [BA_SCHEDULED] = {
 	.name = "scheduled",
 	.type = EAF_TYPE_SCHEDULED,
-	.flags = BAF_OPTIONAL | BAF_TRANSITIVE,
+	.flags = BAF_OPTIONAL | BAF_TRANSITIVE,  // flags: 1 1 0 0 --> 0xC0
 //	.export = bgp_export_scheduled,
 	.encode = bgp_encode_scheduled,
 	.decode = bgp_decode_scheduled,
@@ -1235,8 +1243,8 @@ bgp_export_attrs(struct bgp_export_state *s, ea_list *attrs)
 
 static inline int
 bgp_encode_attr(struct bgp_write_state *s, eattr *a, byte *buf, uint size)
-{
-  ASSERT(EA_PROTO(a->id) == PROTOCOL_BGP);
+{ // Assertation extended by our custom attribute BA_SCHEDULED with the code/id 0x99
+  ASSERT(EA_PROTO(a->id) == PROTOCOL_BGP || a->id == 0x99);
 
   uint code = EA_ID(a->id);
 
@@ -1274,7 +1282,14 @@ bgp_encode_attrs(struct bgp_write_state *s, ea_list *attrs, byte *buf, byte *end
 
     pos += len;
   }
-
+ // own extension
+  eattr *myattr = malloc(sizeof(eattr));
+  myattr->id = 0x99; // id of scheduled attribute
+  myattr->flags = 0xC0; // --> 1100 optional & transitive
+  myattr->type = 0x99;
+  len = bgp_encode_attr(s, myattr, pos, end - pos);
+  pos += len;
+  // end
   return pos - buf;
 }
 
