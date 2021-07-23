@@ -968,6 +968,18 @@ bgp_encode_scheduled(struct bgp_write_state *s, eattr *a, byte *buf, uint size)
 	/*
 	 * Will follow
 	 */
+	// ACCESS global config info network_up_time
+	// bgp_write_stat -> bgp_proto -> bgp_config -> proto_config -> config -> network_up_time
+	//
+
+	struct bgp_config *bgp = s->proto->cf;
+	struct proto_config *conf = &(bgp->c);
+	int start_time = conf->global->net_time->start_time;
+	int up_time = conf->global->net_time->up_time;
+	u32 network = conf->global->net_time->network;
+
+	log(L_INFO "!! attrs.c 978: accessed network time from config. starttime: %x, uptime: %x, prefix: %x",
+			start_time, up_time, network);
 
 	// puts in header	0xC0	0x99	0x02
 	//					flags	code	length
