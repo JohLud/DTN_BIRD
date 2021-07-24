@@ -108,8 +108,11 @@ config_alloc(const char *name)
   c->tf_route = c->tf_proto = TM_ISO_SHORT_MS;
   c->tf_base = c->tf_log = TM_ISO_LONG_MS;
   c->gr_wait = DEFAULT_GR_WAIT;
-  /* Extension for defining network up time */
-  struct network_up_time* net_time = lp_allocz(l, sizeof(struct network_up_time));
+  /*
+   * Extension for defining network up time
+   * later must be a set of scheduled_contact_entry
+   */
+  struct scheduled_contact_entry* net_time = lp_allocz(l, sizeof(struct scheduled_contact_entry));
   c->net_time = net_time;
   return c;
 }
@@ -142,12 +145,6 @@ config_parse(struct config *c)
   protos_preconfig(c);
   rt_preconfig(c);
   cf_parse();
-
-  /*
-   * Print parsed Konfiguration file:
-   */
-  log(L_INFO "!! conf.c 143: Parsed Configfile and time info is: %u %u %u %x %u", c->net_time->start_time, c->net_time->up_time, c->net_time->period_time, c->net_time->network, c->net_time->network_mask);
-  // End
 
   if (EMPTY_LIST(c->protos))
     cf_error("No protocol is specified in the config file");

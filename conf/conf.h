@@ -15,13 +15,22 @@
 #include "lib/resource.h"
 #include "lib/timer.h"
 
-/* Extension to specify the uptime of a network */
-struct network_up_time {
-	int start_time;
-	int up_time;
-	int period_time;
-	u32 network;
-	int network_mask;
+/* Extension to specify one scheduled contact entry of a network
+ * 	start_time: 	when will the network be reachable		32-Bit seconds since 1.1.1970
+ * 	up_time:		how long will the network be reachable	16-Bit seconds of open connection
+ * 	prefix1:		the prefix of the first network			32-Bit
+ * 	prefix1_length:	the length of the first prefix			8-Bit
+ * 	prefix2:		the prefix of the second network		32-Bit
+ * 	prefix2_length:	the length of the second prefix			8-Bit
+ */
+// see specification of scheduled_network_entry for the right data types!
+struct scheduled_contact_entry {
+	long start_time;
+	unsigned short up_time;
+	u32 prefix1;
+	unsigned char prefix1_length;
+	u32 prefix2;
+	unsigned char prefix2_length;
 };
 /* Configuration structure */
 
@@ -69,7 +78,7 @@ struct config {
   int gr_down;				/* This is a pseudo-config for graceful restart */
   btime load_time;			/* When we've got this configuration */
 
-  struct network_up_time *net_time;		/* extension for declaring time information for networks */
+  struct scheduled_contact_entry *net_time;		/* extension for declaring time information for networks */
 };
 
 /* Please don't use these variables in protocols. Use proto_config->global instead. */

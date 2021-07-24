@@ -976,10 +976,14 @@ bgp_encode_scheduled(struct bgp_write_state *s, eattr *a, byte *buf, uint size)
 	struct proto_config *conf = &(bgp->c);
 	int start_time = conf->global->net_time->start_time;
 	int up_time = conf->global->net_time->up_time;
-	u32 network = conf->global->net_time->network;
 
-	log(L_INFO "!! attrs.c 978: accessed network time from config. starttime: %x, uptime: %x, prefix: %x",
-			start_time, up_time, network);
+	u32 network1 = conf->global->net_time->prefix1;
+	int length1 = conf->global->net_time->prefix1_length;
+	u32 network2 = conf->global->net_time->prefix2;
+	int length2 = conf->global->net_time->prefix2_length;
+
+	log(L_INFO "!! attrs.c 985: accessed network time from config. starttime: %u, uptime: %u, prefix1: %x, prefix1 length: %u, prefix2: %x, prefix2 length: %u",
+			start_time, up_time, network1, length1, network2, length2);
 
 	// puts in header	0xC0	0x99	0x02
 	//					flags	code	length
