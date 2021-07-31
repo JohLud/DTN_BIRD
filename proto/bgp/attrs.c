@@ -1016,8 +1016,8 @@ bgp_encode_scheduled(struct bgp_write_state *s, eattr *a, byte *buf, uint size)
 	len += 4;
 
 	// total length of one scheduled contact entry: 16 byte
-	log(L_INFO "!! attrs.c 1000: Encoded: network1: %u.%u.%u.%u, network2: %u.%u.%u.%u",
-			buf[11], buf[12], buf[13], buf[14], buf[15], buf[16], buf[17], buf[18]);
+//	log(L_INFO "!! attrs.c 1000: Encoded: network1: %u.%u.%u.%u, network2: %u.%u.%u.%u",
+//			buf[11], buf[12], buf[13], buf[14], buf[15], buf[16], buf[17], buf[18]);
 
 	return len;
 
@@ -1048,8 +1048,17 @@ bgp_decode_scheduled(struct bgp_parse_state *s, uint code, uint flags, byte *dat
 	u32 prefix2 = get_u32(data + pos);
 	pos += 4;
 
-	log(L_INFO "!! attrs.c 1052: Decoded: start_time: %u, up_time: %u, network1: %x, network2: %x",
-			start_time, up_time, prefix1, prefix2);
+//	log(L_INFO "!! attrs.c 1052: Decoded: start_time: %u, up_time: %u, network1: %x, network2: %x",
+//			start_time, up_time, prefix1, prefix2);
+
+	bgp_set_attr_data(to, s->pool, BA_SCHEDULED, flags, data, len);
+}
+
+static void
+bgp_export_scheduled(struct bgp_export_state *s, eattr *a)
+{
+	log(L_INFO "attrs.c 1060: Export is called.");
+	a->u.ptr = lc_set_sort(s->pool, a->u.ptr);
 }
 
 static inline void
@@ -1210,7 +1219,7 @@ static const struct bgp_attr_desc bgp_attr_table[] = {
 	.name = "scheduled",
 	.type = EAF_TYPE_SCHEDULED,
 	.flags = BAF_OPTIONAL | BAF_TRANSITIVE,  // flags: 1 1 0 0 --> 0xC0
-//	.export = bgp_export_scheduled,
+	.export = bgp_export_scheduled,
 	.encode = bgp_encode_scheduled,
 	.decode = bgp_decode_scheduled,
 //	.format = bgp_format_scheduled,
@@ -1311,7 +1320,7 @@ bgp_export_attrs(struct bgp_export_state *s, ea_list *attrs)
 static inline int
 bgp_encode_attr(struct bgp_write_state *s, eattr *a, byte *buf, uint size)
 { // Assertation extended by our custom attribute BA_SCHEDULED with the code/id 0x99
-  ASSERT(EA_PROTO(a->id) == PROTOCOL_BGP || a->id == 0x99);
+  ASSERT(EA_PROTO(a->id) == PROTOCOL_BGP || a->id == BA_SCHEDULED);
 
   uint code = EA_ID(a->id);
 
