@@ -633,7 +633,6 @@ bgp_read_capabilities(struct bgp_conn *conn, byte *pos, int len)
        * read extension 99 that marks support for DLT
        */
     case 99:
-    	log(L_INFO "!! packets.c 636: BGP DLT Extention.");
     	// later update caps->dlt = 1;
     	break;
     }

@@ -19,6 +19,7 @@
 //#include "lib/lists.h"
 #include "lib/hash.h"
 #include "lib/socket.h"
+#include "conf/conf.h"	// extension
 
 struct linpool;
 struct eattr;
@@ -326,6 +327,7 @@ struct bgp_proto {
   u8 last_error_class; 			/* Error class of last error */
   u32 last_error_code;			/* Error code of last error. BGP protocol errors
 					   are encoded as (bgp_err_code << 16 | bgp_err_subcode) */
+  scheduled_contact_entries *scheduled;
 };
 
 struct bgp_channel {
@@ -750,5 +752,11 @@ void bgp_update_next_hop(struct bgp_export_state *s, eattr *a, ea_list **to);
 #define ORIGIN_EGP		1
 #define ORIGIN_INCOMPLETE	2
 
+// EXTENSION
+// build a simple checksum for a scheduled_contact_entry
+// this is far too simple and error prone, but it is enough for the start
+u32 scheduled_contact_entry_signiture(scheduled_contact_entry entry);
+scheduled_contact_entries * merge_scheduled_contact_entries(scheduled_contact_entries *entries1, scheduled_contact_entries *entries2);
+void print_scheduled_contact_entries(scheduled_contact_entries *entries);
 
 #endif

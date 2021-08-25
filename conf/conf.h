@@ -24,14 +24,22 @@
  * 	prefix2_length:	the length of the second prefix			8-Bit
  */
 // see specification of scheduled_network_entry for the right data types!
-struct scheduled_contact_entry {
+typedef struct scheduled_contact_entry {
 	long start_time;
 	unsigned short up_time;
 	u32 prefix1;
 	unsigned char prefix1_length;
 	u32 prefix2;
 	unsigned char prefix2_length;
-};
+//	 TODO: define makro for sce signature
+} scheduled_contact_entry;
+
+// set of multiple scheduled_contact_entry
+typedef struct scheduled_contact_entries {
+	int number_of_entries;
+	scheduled_contact_entry *entries;
+} scheduled_contact_entries;
+
 /* Configuration structure */
 
 struct config {
