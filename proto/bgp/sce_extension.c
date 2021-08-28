@@ -5,33 +5,20 @@
 #include "lib/unaligned.h"
 
 
-void store_sce(FILE *fd, scheduled_contact_entry *entry, int * pos) {
+/*
+ * Stores an sce struct in a file pointed by fd.
+ * The struct is stored raw and not there separate values.
+ */
+void store_sce(FILE *fd, scheduled_contact_entry *entry) {
 	fwrite(entry, sizeof(*entry), 1, fd);
-	return;
-
-	/*
-	log(L_INFO "sce_ext 50: MARK2");
-	byte * data = malloc(SCE_SIZE);
-	log(L_INFO "sce_ext 50: MARK2.1");
-	put_u32(data + *pos, entry->start_time);
-	*pos += 4;
-	put_u16(data + *pos, entry->duration);		log(L_INFO "sce_ext 50: MARK2.2");
-	*pos += 2;									log(L_INFO "sce_ext 50: MARK2.3");
-	put_u32(data + *pos, entry->asn1);			log(L_INFO "sce_ext 50: MARK2.4");
-	*pos += 4;									log(L_INFO "sce_ext 50: MARK2.5 asn2: %x pos: %x value: %x value-4: %x", entry->asn2, *pos, *(data + *pos), *(data + *pos - 4));
-	put_u32(data + *pos, entry->asn2);			log(L_INFO "sce_ext 50: MARK2.6");
-	*pos += 4;									log(L_INFO "sce_ext 50: MARK2.7");
-	char nl = 0x0a;		// ascii char for newline "\n"
-	put_u8(data + *pos, nl);					log(L_INFO "sce_ext 50: MARK2.8");
-	*pos += 1;
-	log(L_INFO "sce_ext 50: MARK3");
-	size_t result = fwrite(data, SCE_SIZE, 1, fd);
-	log(L_INFO "sce_ext 50: MARK4");
-	free(data);*/
 }
 
+/*
+ * Stores all sces in entries in a file named SCES_FILENAME.
+ */
 void store_sces(scheduled_contact_entries *entries) {
 
+	// merge existing sces with the new ones to store all together
 	scheduled_contact_entries * existing_sces = load_sces();
 	scheduled_contact_entries * all_sces;
 
@@ -42,45 +29,40 @@ void store_sces(scheduled_contact_entries *entries) {
 	}
 
 	FILE *fd = fopen(SCES_FILENAME, "w");
-	int pos = 0;
+
 	for (int i = 0; i < all_sces->number_of_entries; i++) {
-		store_sce(fd, (all_sces->entries+i), &pos);
+		store_sce(fd, (all_sces->entries+i));
 	}
+
 	fclose(fd);
 	free(entries);
 	if (existing_sces) free(existing_sces);
 //	if (all_sces) free(all_sces);
 }
 
+/*
+ * Load all sces that are stored in SCES_FILENAME and return a pointer pointing to them.
+ */
 scheduled_contact_entries * load_sces(void) {
 
+	// check if file exists and how large it is
 	struct stat fileinfo;
 	int exists = stat(SCES_FILENAME, &fileinfo);
 
-	// check if file exists
 	if (exists != 0) {
 		return NULL;
 	}
 
 	int filesize = fileinfo.st_size;
-//	int num_of_entries = filesize / 15;
 
 	int num_of_entries = filesize / sizeof(scheduled_contact_entry);
-	byte * data = malloc(filesize);
 
 	FILE *fd = fopen(SCES_FILENAME, "rb");
-//	size_t result = fread(data, filesize, 1, fd);
-
-
-	/*
-	 * Testing area
-	 */
-
 
 	scheduled_contact_entry * entry = malloc(sizeof(scheduled_contact_entry) * num_of_entries);
 
+	// read number of sces from the file
 	fread(entry, sizeof(scheduled_contact_entry) * num_of_entries, 1, fd);
-
 
 	fclose(fd);
 
@@ -88,39 +70,6 @@ scheduled_contact_entries * load_sces(void) {
 	sce->entries = entry;
 	sce->number_of_entries = num_of_entries;
 	return sce;
-
-
-
-	/*
-	scheduled_contact_entry * sce = malloc( sizeof(scheduled_contact_entry) * num_of_entries);
-
-	int pos = 0;
-	for (int i = 0; i < num_of_entries; i++) {
-		u32 start_time = get_u32(data + pos);
-		pos += 4;
-		u16 duration = get_u16(data + pos);
-		pos += 2;
-		u32 asn1 = get_u32(data + pos);
-		pos += 4;
-		u32 asn2 = get_u32(data + pos);
-		pos += 4;
-		// newline 1 Byte Separator
-		pos += 1;
-
-		(sce+i)->start_time = start_time;
-		(sce+i)->duration = duration;
-		(sce+i)->asn1 = asn1;
-		(sce+i)->asn2 = asn2;
-	}
-
-//	free(data);
-	scheduled_contact_entries * sces = malloc( sizeof(scheduled_contact_entries) );
-
-	sces->number_of_entries = num_of_entries;
-	sces->entries = sce;
-
-	return sces;
-	*/
 }
 
 
@@ -128,7 +77,7 @@ scheduled_contact_entries * load_sces(void) {
 // build a simple checksum for a scheduled_contact_entry for checking duplicates
 // this is far too simple and error prone, but it is enough for the start
 //	 TODO: define makro for sce signature
-u32 sce_signiture(scheduled_contact_entry entry) {
+u32 sce_signature(scheduled_contact_entry entry) {
 	return entry.start_time + entry.duration + entry.asn1 + entry.asn2;
 }
 
@@ -142,10 +91,10 @@ scheduled_contact_entries * merge_sces(scheduled_contact_entries *entries1, sche
 	 * We test if signatures are identical by XORing their values.
 	 */
 	for (int i = 0; i < entries1->number_of_entries; i++) {
-		u32 signiture1 = sce_signiture(*(entries1->entries+i));
+		u32 signature1 = sce_signature(*(entries1->entries+i));
 		for (int j = 0; j < entries2->number_of_entries; j++) {
-			u32 signiture2 = sce_signiture(*(entries2->entries+j));
-			if (signiture1 == signiture2) {
+			u32 signature2 = sce_signature(*(entries2->entries+j));
+			if (signature1 == signature2) {
 				duplicates++;
 			}
 		}
@@ -167,11 +116,11 @@ scheduled_contact_entries * merge_sces(scheduled_contact_entries *entries1, sche
 	for (int i = 0; i < entries2->number_of_entries; i++) {
 		// only add the entries, that are not added yet, check added entries from entries1
 		_Bool duplicate = 0;
-		u32 signiture1 = sce_signiture(*(entries2->entries+i));
-		// compare signature of entry2 against every signiture of entry1
+		u32 signature1 = sce_signature(*(entries2->entries+i));
+		// compare signature of entry2 against every signature of entry1
 		for (int j = 0; j < entries1->number_of_entries; j++) {
-			u32 signiture2 = sce_signiture(*(entries1->entries+j));
-			if (signiture1 == signiture2) {
+			u32 signature2 = sce_signature(*(entries1->entries+j));
+			if (signature1 == signature2) {
 				duplicate = 1;	// if signature of entry1 & entry2 is identical --> duplicate --> entry2 not added
 			}
 		}

@@ -7,7 +7,7 @@
 // build a simple checksum for a scheduled_contact_entry
 // this is far too simple and error prone, but it is enough for the start
 #define SCES_FILENAME	"sces.bin"
-#define SCE_SIZE	15
+//#define SCE_SIZE	15
 
 /* Extension to specify one scheduled contact entry of a network
  * 	start_time: 	when will the network be reachable		32-Bit seconds since 1.1.1970
@@ -38,7 +38,7 @@ scheduled_contact_entries * merge_sces(scheduled_contact_entries *entries1, sche
 void print_sces(scheduled_contact_entries *entries);
 
 void store_sces(scheduled_contact_entries *entries);
-void store_sce(FILE *fd, scheduled_contact_entry *entry, int * pos);
+void store_sce(FILE *fd, scheduled_contact_entry *entry);
 //void write_15_byte(FILE *fd, byte *data);
 scheduled_contact_entries * load_sces(void);
 

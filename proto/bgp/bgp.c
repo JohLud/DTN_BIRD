@@ -1722,14 +1722,7 @@ bgp_init(struct proto_config *CF)
    * This scheduled_contact_entries aree defined in thee configuration file "birdconf"
    * if scheduled contact entries are definded in the config
    */
-//  if (CF->global->net_time) {
-//	  scheduled_contact_entries * entries = malloc(sizeof(scheduled_contact_entries));
-//	  scheduled_contact_entry * entry = malloc(sizeof(scheduled_contact_entry));
-//	  entry = CF->global->net_time;
-//	  entries->entries = entry;
-//	  entries->number_of_entries = 1;
-//	  p->scheduled = entries;
-//  }
+  // TODO: Support for multiple sces
 
   if (CF->global->sce) {
 	  scheduled_contact_entries * entries = malloc(sizeof(scheduled_contact_entries));
@@ -1737,23 +1730,7 @@ bgp_init(struct proto_config *CF)
 	  entries->entries = CF->global->sce;
 	  store_sces(entries);
   }
-/*
-  scheduled_contact_entries * entries2 = malloc(sizeof(scheduled_contact_entries));
-  scheduled_contact_entry * entry = malloc(sizeof(scheduled_contact_entry));
 
-  entry->start_time = 5;
-  entry->duration = 6;
-  entry->asn1 = 7;
-  entry->asn2 = 8;
-
-  entries2->entries = entry;
-  entries2->number_of_entries = 1;
-
-  store_sces(entries2);
-
-  log(L_INFO "\nLoading sces:");
-  print_sces(load_sces());
-*/
   return P;
 }
 
