@@ -133,13 +133,11 @@ CF_GRAMMAR
 /* own extension for the network up time information for the bgp extension */
 conf: ntwupti ;
 ntwupti:
-   NETWORK_UP_TIME NUM NUM IP4 '/' NUM IP4 '/' NUM ';' {
-	new_config->net_time->start_time = $2;
-	new_config->net_time->up_time = $3;
-	new_config->net_time->prefix1 = ip4_to_u32($4);
-	new_config->net_time->prefix1_length = $6;
-	new_config->net_time->prefix2 = ip4_to_u32($7);
-	new_config->net_time->prefix2_length = $9;
+   NETWORK_UP_TIME NUM NUM NUM NUM ';' {
+	new_config->sce->start_time = $2;
+	new_config->sce->duration = $3;
+	new_config->sce->asn1 = $4;
+	new_config->sce->asn2 = $5;
    }
 ;
 

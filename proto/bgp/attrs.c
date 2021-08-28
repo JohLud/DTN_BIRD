@@ -23,6 +23,7 @@
 #include "lib/unaligned.h"
 
 #include "bgp.h"
+#include "sce_extension.h"
 
 /*
  *   UPDATE message error handling
@@ -967,50 +968,40 @@ bgp_encode_scheduled(struct bgp_write_state *s, eattr *a, byte *buf, uint size)
 {
 	log(L_INFO "attrs.c 1079: ENCODING: START");
 
-	scheduled_contact_entries * entries = s->proto->scheduled;
+	scheduled_contact_entries * entries = load_sces();
 
-	print_scheduled_contact_entries(entries);
+	print_sces(entries);
 
 	int num_entries = entries->number_of_entries;
 	if (num_entries == 0) return 0;
 
 	byte flags = a->flags;  // C0 --> optional & transitive
-	int len = bgp_put_attr_hdr3(buf, BA_SCHEDULED, flags, num_entries*16);	// every scheduled_contact_entry has a size of 16 byte
+	int len = bgp_put_attr_hdr3(buf, BA_SCHEDULED, flags, num_entries*14);	// every scheduled_contact_entry has a size of 14 byte
 
 	for (int i = 0; i < num_entries; i++) {
 		scheduled_contact_entry *entry = (entries->entries+i);
 		u32 start_time = entry->start_time;
-		u16 up_time = entry->up_time;
-		u32 network1 = entry->prefix1;
-		int length1 = entry->prefix1_length;
-		u32 network2 = entry->prefix2;
-		int length2 = entry->prefix2_length;
+		u16 duration = entry->duration;
+		u32 asn1 = entry->asn1;
+		u32 asn2 = entry->asn2;
 
 		// start_time:		32 bit
 		put_u32(buf+len, start_time);
 		len += 4;
 
 		// up_time:			16 bit
-		put_u16(buf+len, up_time);
+		put_u16(buf+len, duration);
 		len += 2;
 
-		// prefix1 length:	8 bit
-		put_u8(buf+len, length1);
-		len += 1;
-
-		// prefix2 length:	8 bit
-		put_u8(buf+len, length2);
-		len += 1;
-
-		// prefix1:			32 bit IPv4
-		put_u32(buf+len, network1);
+		// asn1:			32 bit ASN
+		put_u32(buf+len, asn1);
 		len += 4;
 
-		// prefix2:			32 bit IPv4
-		put_u32(buf+len, network2);
+		// asn2:			32 bit ASN
+		put_u32(buf+len, asn2);
 		len += 4;
 	}
-	// total length of one scheduled contact entry: 16 byte
+	// total length of one scheduled contact entry: 14 byte
 
 	log(L_INFO "attrs.c 1079: ENCODING: FINISH\n");
 	return len;
@@ -1021,7 +1012,7 @@ static void
 bgp_decode_scheduled(struct bgp_parse_state *s, uint code, uint flags, byte *data, uint len, ea_list **to)
 {
 	log(L_INFO "attrs.c 1079: DECODING: START");
-	int num_of_entries = len/16;
+	int num_of_entries = len/14;
 
 	int pos = 0;
 	// TODO: check if it is in valid format
@@ -1033,38 +1024,30 @@ bgp_decode_scheduled(struct bgp_parse_state *s, uint code, uint flags, byte *dat
 		u32 start_time = get_u32(data + pos);
 		pos += 4;
 
-		u16 up_time = get_u16(data + pos);
+		u16 duration = get_u16(data + pos);
 		pos += 2;
 
-		u8 length1 = get_u8(data + pos);
-		pos += 1;
-
-		u8 length2 = get_u8(data + pos);
-		pos += 1;
-
-		u32 prefix1 = get_u32(data + pos);
+		u32 asn1 = get_u32(data + pos);
 		pos += 4;
 
-		u32 prefix2 = get_u32(data + pos);
+		u32 asn2 = get_u32(data + pos);
 		pos += 4;
 
 		(entry_array+i)->start_time = start_time;
-		(entry_array+i)->up_time = up_time;
-		(entry_array+i)->prefix1 = prefix1;
-		(entry_array+i)->prefix1_length = length1;
-		(entry_array+i)->prefix2 = prefix2;
-		(entry_array+i)->prefix2_length = length2;
-
+		(entry_array+i)->duration = duration;
+		(entry_array+i)->asn1 = asn1;
+		(entry_array+i)->asn2 = asn2;
 	}
 	entries->number_of_entries = num_of_entries;
 	entries->entries = entry_array;
-	log(L_INFO "attrs.c 1079: DECODING: Anfang\n");
-	print_scheduled_contact_entries(s->proto->scheduled);
-	log(L_INFO "attrs.c 1079: DECODING: Neu\n");
-	print_scheduled_contact_entries(entries);
-	log(L_INFO "attrs.c 1079: DECODING: Merged\n");
-	s->proto->scheduled = merge_scheduled_contact_entries(s->proto->scheduled, entries);
-	print_scheduled_contact_entries(s->proto->scheduled);
+
+	log(L_INFO "attrs.c 1044: DECODING: Anfang:\n");
+	print_sces(load_sces());
+
+	log(L_INFO "attrs.c 1047: DECODING: Neu:\n");
+	print_sces(entries);
+
+	store_sces(entries);
 
 	log(L_INFO "attrs.c 1079: DECODING: FINISH\n");
 

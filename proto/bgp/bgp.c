@@ -1722,15 +1722,38 @@ bgp_init(struct proto_config *CF)
    * This scheduled_contact_entries aree defined in thee configuration file "birdconf"
    * if scheduled contact entries are definded in the config
    */
-  if (CF->global->net_time) {
-	  scheduled_contact_entries * entries = malloc(sizeof(scheduled_contact_entries));
-	  scheduled_contact_entry * entry = malloc(sizeof(scheduled_contact_entry));
-	  entry = CF->global->net_time;
-	  entries->entries = entry;
-	  entries->number_of_entries = 1;
-	  p->scheduled = entries;
-  }
+//  if (CF->global->net_time) {
+//	  scheduled_contact_entries * entries = malloc(sizeof(scheduled_contact_entries));
+//	  scheduled_contact_entry * entry = malloc(sizeof(scheduled_contact_entry));
+//	  entry = CF->global->net_time;
+//	  entries->entries = entry;
+//	  entries->number_of_entries = 1;
+//	  p->scheduled = entries;
+//  }
 
+  if (CF->global->sce) {
+	  scheduled_contact_entries * entries = malloc(sizeof(scheduled_contact_entries));
+	  entries->number_of_entries = 1;
+	  entries->entries = CF->global->sce;
+	  store_sces(entries);
+  }
+/*
+  scheduled_contact_entries * entries2 = malloc(sizeof(scheduled_contact_entries));
+  scheduled_contact_entry * entry = malloc(sizeof(scheduled_contact_entry));
+
+  entry->start_time = 5;
+  entry->duration = 6;
+  entry->asn1 = 7;
+  entry->asn2 = 8;
+
+  entries2->entries = entry;
+  entries2->number_of_entries = 1;
+
+  store_sces(entries2);
+
+  log(L_INFO "\nLoading sces:");
+  print_sces(load_sces());
+*/
   return P;
 }
 
@@ -2542,81 +2565,6 @@ bgp_show_proto_info(struct proto *P)
 	cli_msg(-1006, "    IGP IPv6 table: %s", c->igp_table_ip6->name);
     }
   }
-}
-
-// EXTENSION
-// build a simple checksum for a scheduled_contact_entry
-// this is far too simple and error prone, but it is enough for the start
-u32 scheduled_contact_entry_signiture(scheduled_contact_entry entry) {
-	return entry.start_time ^ entry.up_time ^ entry.prefix1 ^ entry.prefix2 ^ entry.prefix1_length ^ entry.prefix2_length;
-}
-
-scheduled_contact_entries * merge_scheduled_contact_entries(scheduled_contact_entries *entries1, scheduled_contact_entries *entries2)
-{
-	scheduled_contact_entries * entries = malloc(sizeof(scheduled_contact_entries));
-	int num_of_entries = 0;
-	int duplicates = 0;
-	/*
-	 * For initializing the scheduled_contact_entry array we need to calculate the size.
-	 * We test if signatures are identical by XORing their values.
-	 */
-	for (int i = 0; i < entries1->number_of_entries; i++) {
-		u32 signiture1 = scheduled_contact_entry_signiture(*(entries1->entries+i));
-		for (int j = 0; j < entries2->number_of_entries; j++) {
-			u32 signiture2 = scheduled_contact_entry_signiture(*(entries2->entries+j));
-			if (signiture1 == signiture2) {
-				duplicates++;
-			}
-		}
-	}
-	num_of_entries = entries1->number_of_entries + entries2->number_of_entries - duplicates;
-	scheduled_contact_entry * entry_array = malloc(sizeof(scheduled_contact_entry)*num_of_entries);
-	/*
-	 * first add every entry of entries1
-	 * and later add every entry of entries2, but
-	 * check is the same sce_signature is inserted yet
-	 * This presupposes that there are no duplicates in entry1
-	 */
-	// TODO: Pass value and assign to dereferenced pointer and not pointer to pointer
-	int index = 0;
-	for (int i = 0; i < entries1->number_of_entries; i++) {
-		*(entry_array+i) = *(entries1->entries+i);
-		index++;
-	}
-	for (int i = 0; i < entries2->number_of_entries; i++) {
-		// only add the entries, that are not added yet, check added entries from entries1
-		_Bool duplicate = 0;
-		u32 signiture1 = scheduled_contact_entry_signiture(*(entries2->entries+i));
-		// compare signature of entry2 against every signiture of entry1
-		for (int j = 0; j < entries1->number_of_entries; j++) {
-			u32 signiture2 = scheduled_contact_entry_signiture(*(entries1->entries+j));
-			if (signiture1 == signiture2) {
-				duplicate = 1;	// if signature of entry1 & entry2 is identical --> duplicate --> entry2 not added
-			}
-		}
-		if (!duplicate) {
-			// FIX assignment
-			*(entry_array+index) = *(entries2->entries+i);
-			index++;
-		}
-	}
-	entries->number_of_entries = num_of_entries;
-	entries->entries = entry_array;
-	// TODO: free entries1 and entries2?
-
-	return entries;
-}
-
-void print_scheduled_contact_entries(scheduled_contact_entries *entries) {
-	log(L_INFO "===============\nPrinting %u scheduled contact entries.", entries->number_of_entries);
-	// TODO: remove later only for testing purpose
-	if (entries->number_of_entries > 10) return;
-	for (int i = 0; i < entries->number_of_entries; i++) {
-		log(L_INFO "Entry %u:\n  => start time = %x\n  => duration = %x\n  => prefix1 = %x\n  => prefix2 = %x",
-				i+1, (entries->entries+i)->start_time, (entries->entries+i)->up_time,
-				(entries->entries+i)->prefix1, (entries->entries+i)->prefix2);
-	}
-	log(L_INFO "===============\n");
 }
 
 struct channel_class channel_bgp = {

@@ -57,6 +57,8 @@
 #include "filter/filter.h"
 #include "sysdep/unix/unix.h"
 
+#include "proto/bgp/sce_extension.h"
+
 
 static jmp_buf conf_jmpbuf;
 
@@ -112,8 +114,13 @@ config_alloc(const char *name)
    * Extension for defining network up time
    * later must be a set of scheduled_contact_entry
    */
-  struct scheduled_contact_entry* net_time = lp_allocz(l, sizeof(struct scheduled_contact_entry));
-  c->net_time = net_time;
+  struct scheduled_contact_entry* sce = lp_allocz(l, sizeof(struct scheduled_contact_entry));
+//  scheduled_contact_entries* sces = lp_allocz(l, sizeof(struct scheduled_contact_entry));
+//  sces->number_of_entries = 1;
+//  sces->entries = sce;
+  c->sce = sce;
+//  store_sces(sces);
+
   return c;
 }
 

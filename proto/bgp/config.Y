@@ -9,6 +9,7 @@
 CF_HDR
 
 #include "proto/bgp/bgp.h"
+// #include "proto/bgp/sce_extension.h"	// EXTENSION
 
 CF_DEFINES
 

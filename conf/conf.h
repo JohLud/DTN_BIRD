@@ -15,30 +15,7 @@
 #include "lib/resource.h"
 #include "lib/timer.h"
 
-/* Extension to specify one scheduled contact entry of a network
- * 	start_time: 	when will the network be reachable		32-Bit seconds since 1.1.1970
- * 	up_time:		how long will the network be reachable	16-Bit seconds of open connection
- * 	prefix1:		the prefix of the first network			32-Bit
- * 	prefix1_length:	the length of the first prefix			8-Bit
- * 	prefix2:		the prefix of the second network		32-Bit
- * 	prefix2_length:	the length of the second prefix			8-Bit
- */
-// see specification of scheduled_network_entry for the right data types!
-typedef struct scheduled_contact_entry {
-	long start_time;
-	unsigned short up_time;
-	u32 prefix1;
-	unsigned char prefix1_length;
-	u32 prefix2;
-	unsigned char prefix2_length;
-//	 TODO: define makro for sce signature
-} scheduled_contact_entry;
-
-// set of multiple scheduled_contact_entry
-typedef struct scheduled_contact_entries {
-	int number_of_entries;
-	scheduled_contact_entry *entries;
-} scheduled_contact_entries;
+#include "proto/bgp/sce_extension.h"
 
 /* Configuration structure */
 
@@ -86,7 +63,10 @@ struct config {
   int gr_down;				/* This is a pseudo-config for graceful restart */
   btime load_time;			/* When we've got this configuration */
 
-  struct scheduled_contact_entry *net_time;		/* extension for declaring time information for networks */
+  // EXTENSION to define scheduled contact entries
+  // TODO: define more than one
+  struct scheduled_contact_entry *sce;
+//  struct scheduled_contact_entries * sces;
 };
 
 /* Please don't use these variables in protocols. Use proto_config->global instead. */

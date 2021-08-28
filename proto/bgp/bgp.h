@@ -19,7 +19,9 @@
 //#include "lib/lists.h"
 #include "lib/hash.h"
 #include "lib/socket.h"
-#include "conf/conf.h"	// extension
+#include "conf/conf.h"	// extension?
+#include "nest/protocol.h" // extension
+//#include "sce_extension.h" // EXTENSION
 
 struct linpool;
 struct eattr;
@@ -327,7 +329,6 @@ struct bgp_proto {
   u8 last_error_class; 			/* Error class of last error */
   u32 last_error_code;			/* Error code of last error. BGP protocol errors
 					   are encoded as (bgp_err_code << 16 | bgp_err_subcode) */
-  scheduled_contact_entries *scheduled;
 };
 
 struct bgp_channel {
@@ -752,11 +753,67 @@ void bgp_update_next_hop(struct bgp_export_state *s, eattr *a, ea_list **to);
 #define ORIGIN_EGP		1
 #define ORIGIN_INCOMPLETE	2
 
+#endif
+
+/*
+ * Section for Extension
+ */
+
+
+
+
+
+
+/*
+
+#incude <stdio.h>
+
 // EXTENSION
 // build a simple checksum for a scheduled_contact_entry
 // this is far too simple and error prone, but it is enough for the start
-u32 scheduled_contact_entry_signiture(scheduled_contact_entry entry);
-scheduled_contact_entries * merge_scheduled_contact_entries(scheduled_contact_entries *entries1, scheduled_contact_entries *entries2);
-void print_scheduled_contact_entries(scheduled_contact_entries *entries);
+#define SCES_FILENAME	=	"entries.sce"
 
-#endif
+//Extension to specify one scheduled contact entry of a network
+// * 	start_time: 	when will the network be reachable		32-Bit seconds since 1.1.1970
+// * 	up_time:		how long will the network be reachable	16-Bit seconds of open connection
+// * 	asn1:		the ASN of the first network				32-Bit
+// * 	asn2:		the ASN of the second network				32-Bit
+// *
+// * 	Total size:	112 Bit , 14 Byte
+// see specification of scheduled_network_entry for the right data types!
+typedef struct scheduled_contact_entry {
+	long start_time;
+	unsigned short duration;
+	u32 asn1;
+	u32 asn2;
+//	 TODO: define makro for sce signature
+} scheduled_contact_entry;
+
+// set of multiple scheduled_contact_entry
+typedef struct scheduled_contact_entries {
+	int number_of_entries;
+	scheduled_contact_entry *entries;
+} scheduled_contact_entries;
+
+
+u32 sce_signiture(scheduled_contact_entry entry);
+scheduled_contact_entries * merge_sces(scheduled_contact_entries *entries1, scheduled_contact_entries *entries2);
+void print_sces(scheduled_contact_entries *entries);
+
+void store_sces(scheduled_contact_entries *entries);
+void store_sce(FILE *fd, scheduled_contact_entry *entry);
+void write_15_byte(FILE *fd, byte *data[]);
+scheduled_contact_entries * load_sces(void);
+
+*/
+
+
+
+
+
+
+
+
+
+
+//#endif

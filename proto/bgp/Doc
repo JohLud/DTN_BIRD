@@ -1,3 +1,4 @@
 S bgp.c
 S packets.c
 S attrs.c
+S sce_extension.c
