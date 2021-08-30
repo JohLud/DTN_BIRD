@@ -1,8 +1,48 @@
 #include <stdio.h>
 #include <sys/stat.h>
+#include <time.h>
 
 #include "bgp.h"
 #include "lib/unaligned.h"
+#include "lib/timer.h"
+
+
+/**
+ * function: function to be called, either contact_begin or contact_end
+ * when: in milliseconds since 01.01.1970 UTC when the function should be called
+ */
+timer * register_timer(void (*hook)(struct timer *), unsigned long when, scheduled_contact_entry * entry_data) {
+
+	unsigned long firetime = convert_unixtime_to_secfromnow(when);
+	timer * tm = tm_new_init(NULL, hook, entry_data, 0, 0);
+
+	tm_start(tm, firetime*1000000);
+
+	return tm;
+}
+
+void
+contact_begin(timer *t) {
+	log(L_INFO "sce_ext 27: Begin of contact!");
+}
+
+void
+contact_end(timer *t) {
+	log(L_INFO "sce_ext 32: End of contact!");
+
+	// The sce in t->data is freed, because it is useless from now on
+	// the timer also
+	free(t->data);
+	free(t);
+}
+
+/**
+ * Seconds since 01.01.1970 UTC (Unix Epoch) are converted to seconds since now.
+ */
+unsigned long convert_unixtime_to_secfromnow(unsigned long unixtime) {
+	time_t current_time = time(NULL);
+	return unixtime - current_time;
+}
 
 
 /*
@@ -35,8 +75,12 @@ void store_sces(scheduled_contact_entries *entries) {
 	}
 
 	fclose(fd);
-	free(entries);
-	if (existing_sces) free(existing_sces);
+
+	// not freed because the sces are referenced in the timer data structure
+	// TODO: does this make sense since sces only points to sce?
+
+//	free(entries);
+//	if (existing_sces) free(existing_sces);
 //	if (all_sces) free(all_sces);
 }
 

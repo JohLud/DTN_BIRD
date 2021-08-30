@@ -32,6 +32,10 @@ typedef struct scheduled_contact_entries {
 	scheduled_contact_entry *entries;
 } scheduled_contact_entries;
 
+timer * register_timer(void (*hook)(struct timer *), unsigned long when, scheduled_contact_entry * entry_data);
+void contact_begin(timer *t);
+void contact_end(timer *t);
+unsigned long convert_unixtime_to_secfromnow(unsigned long unixtime);
 
 u32 sce_signiture(scheduled_contact_entry entry);
 scheduled_contact_entries * merge_sces(scheduled_contact_entries *entries1, scheduled_contact_entries *entries2);
