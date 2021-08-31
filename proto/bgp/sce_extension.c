@@ -45,11 +45,9 @@ void
 contact_end(timer *t) {
 	log(L_INFO "sce_ext 32: End of contact!");
 
-	// The sce in t->data is freed, because it is useless from now on
-	// the timer also
-	// TODO: why does the programm freeze, when we free() this structs?
-//	free(t->data);
-//	free(t);
+	// release resources
+	tm_stop(t);
+	rfree(t);
 }
 
 /**
