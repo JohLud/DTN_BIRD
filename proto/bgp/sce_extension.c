@@ -8,6 +8,21 @@
 
 
 /**
+ * Register timers for every sce in the given entries.
+ * One timer is registered for the start_time and the other one, when the
+ * contact ends (start_time + duration)
+ */
+void register_sces(scheduled_contact_entries * entries) {
+	for (int i = 0; i < entries->number_of_entries; i++) {
+		scheduled_contact_entry * entry = (entries->entries+i);
+		unsigned long begin = entry->start_time;
+		unsigned long end = entry->start_time + entry->duration;
+		register_timer(contact_begin, begin, entry);
+		register_timer(contact_end, end, entry);
+	}
+}
+
+/**
  * function: function to be called, either contact_begin or contact_end
  * when: in milliseconds since 01.01.1970 UTC when the function should be called
  */
@@ -32,8 +47,9 @@ contact_end(timer *t) {
 
 	// The sce in t->data is freed, because it is useless from now on
 	// the timer also
-	free(t->data);
-	free(t);
+	// TODO: why does the programm freeze, when we free() this structs?
+//	free(t->data);
+//	free(t);
 }
 
 /**
@@ -62,10 +78,20 @@ void store_sces(scheduled_contact_entries *entries) {
 	scheduled_contact_entries * existing_sces = load_sces();
 	scheduled_contact_entries * all_sces;
 
+	// if there are new sces, register timers for them
 	if (existing_sces) {
 		all_sces = merge_sces(entries, existing_sces);
+
+		// find the new entries that are not in the existing entries and register timers for them
+		scheduled_contact_entries * new_entries = find_new_sces(entries, existing_sces);
+		register_sces(new_entries);
 	} else {
 		all_sces = entries;
+
+		// if all entries are new (they are because there weren't existing),
+		// register new timers for every sce
+		register_sces(entries);
+
 	}
 
 	FILE *fd = fopen(SCES_FILENAME, "w");
@@ -116,6 +142,59 @@ scheduled_contact_entries * load_sces(void) {
 	return sce;
 }
 
+/**
+ * Finds which sces from the first sces (param: new) are new i.e. not included in the second sces (param: existing)
+ * and returns them.
+ */
+scheduled_contact_entries * find_new_sces(scheduled_contact_entries * new, scheduled_contact_entries * existing) {
+
+	// first find out how many new sces exists to malloc
+	int num_of_new = 0;
+
+	for (int i = 0; i < new->number_of_entries; i++) {
+		u32 sign_new = sce_signature(*(new->entries+i));
+		_Bool newone = 1;
+
+		// check signature of the entry against all existing signatures
+		for (int j = 0; j < existing->number_of_entries; j++) {
+			u32 sign_existing = sce_signature(*(existing->entries+j));
+			if (sign_new == sign_existing) newone = 0;
+		}
+
+		// if newone is still 1, the sce is new
+		if (newone) {
+			num_of_new++;
+		}
+	}
+
+	scheduled_contact_entry * entry_array = malloc(sizeof(scheduled_contact_entry) * num_of_new);
+
+	// store the new entries in entry
+	int pos = 0;
+	for (int i = 0; i < new->number_of_entries; i++) {
+		u32 sign_new = sce_signature(*(new->entries+i));
+		_Bool newone = 1;
+
+		for (int j = 0; j < existing->number_of_entries; j++) {
+			u32 sign_existing = sce_signature(*(existing->entries+j));
+			if (sign_new == sign_existing) newone = 0;
+		}
+
+		// if newone is still 1, the sce is new
+		// pos is incremented to move array pointer forward
+		if (newone) {
+			*(entry_array+pos) = *(new->entries+i);
+			pos++;
+		}
+	}
+
+	scheduled_contact_entries * entries = malloc(sizeof(scheduled_contact_entries));
+	entries->number_of_entries = num_of_new;
+	entries->entries = entry_array;
+
+	return entries;
+
+}
 
 
 // build a simple checksum for a scheduled_contact_entry for checking duplicates
@@ -132,7 +211,7 @@ scheduled_contact_entries * merge_sces(scheduled_contact_entries *entries1, sche
 	int duplicates = 0;
 	/*
 	 * For initializing the scheduled_contact_entry array we need to calculate the size.
-	 * We test if signatures are identical by XORing their values.
+	 * We test if signatures are identical.
 	 */
 	for (int i = 0; i < entries1->number_of_entries; i++) {
 		u32 signature1 = sce_signature(*(entries1->entries+i));
@@ -184,7 +263,7 @@ scheduled_contact_entries * merge_sces(scheduled_contact_entries *entries1, sche
 void print_sces(scheduled_contact_entries *entries) {
 	log(L_INFO "===============\nPrinting %u scheduled contact entries.", entries->number_of_entries);
 	for (int i = 0; i < entries->number_of_entries; i++) {
-		log(L_INFO "Entry %u:\n  =>  %x %x %x %x",
+		log(L_INFO "Entry %u:\n  =>  %u %u %u %u",
 				i+1, (entries->entries+i)->start_time, (entries->entries+i)->duration,
 				(entries->entries+i)->asn1, (entries->entries+i)->asn2);
 	}
