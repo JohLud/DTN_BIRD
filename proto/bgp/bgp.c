@@ -1719,7 +1719,7 @@ bgp_init(struct proto_config *CF)
   /*
    * EXTENSION
    * Add scheduled contact entries to bgp_proto struct
-   * This scheduled_contact_entries aree defined in thee configuration file "birdconf"
+   * This scheduled_contact_entries are defined in the configuration file "birdconf"
    * if scheduled contact entries are definded in the config
    */
   // TODO: Support for multiple sces
@@ -1728,7 +1728,21 @@ bgp_init(struct proto_config *CF)
 	  scheduled_contact_entries * entries = malloc(sizeof(scheduled_contact_entries));
 	  entries->number_of_entries = 1;
 	  entries->entries = CF->global->sce;
-	  store_sces(entries);
+
+	  // TODO: Only the first channel is taken "ipv4" that is later changed to "master4".
+	  // PROBLEM: order in config does play a role, if ipv6 is configured earlier, we get master6 table
+	  // so we have to ensure, that we get ipv4 (master4). (If we don't want dual stack and only ipv4)
+	  /*
+	   * FIX: search with afi = BGP_AF_IPV4
+	   * struct bgp_channel *c = bgp_get_channel(s->proto, afi);
+	   */
+	  struct channel * ch = HEAD(P->channels);
+	  if (ch) {
+		  store_sces(entries,  ch);
+	  } else {
+		  log(L_INFO "bgc.c 1732: Channel not found");
+		  store_sces(entries, NULL);
+	  }
   }
 
   return P;

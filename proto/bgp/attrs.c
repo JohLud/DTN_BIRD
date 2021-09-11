@@ -966,11 +966,9 @@ bgp_format_mpls_label_stack(const eattr *a, byte *buf, uint size)
 static int
 bgp_encode_scheduled(struct bgp_write_state *s, eattr *a, byte *buf, uint size)
 {
-	log(L_INFO "attrs.c 1079: ENCODING: START");
+//	log(L_INFO "attrs.c 1079: ENCODING: START");
 
 	scheduled_contact_entries * entries = load_sces();
-
-	print_sces(entries);
 
 	int num_entries = entries->number_of_entries;
 	if (num_entries == 0) return 0;
@@ -1003,7 +1001,7 @@ bgp_encode_scheduled(struct bgp_write_state *s, eattr *a, byte *buf, uint size)
 	}
 	// total length of one scheduled contact entry: 14 byte
 
-	log(L_INFO "attrs.c 1079: ENCODING: FINISH\n");
+//	log(L_INFO "attrs.c 1079: ENCODING: FINISH\n");
 	return len;
 
 }
@@ -1011,7 +1009,7 @@ bgp_encode_scheduled(struct bgp_write_state *s, eattr *a, byte *buf, uint size)
 static void
 bgp_decode_scheduled(struct bgp_parse_state *s, uint code, uint flags, byte *data, uint len, ea_list **to)
 {
-	log(L_INFO "attrs.c 1079: DECODING: START");
+//	log(L_INFO "attrs.c 1079: DECODING: START");
 	int num_of_entries = len/14;
 
 	int pos = 0;
@@ -1041,15 +1039,19 @@ bgp_decode_scheduled(struct bgp_parse_state *s, uint code, uint flags, byte *dat
 	entries->number_of_entries = num_of_entries;
 	entries->entries = entry_array;
 
-	log(L_INFO "attrs.c 1044: DECODING: Anfang:\n");
-	print_sces(load_sces());
+	// get channel that contains the master4 routingtable, is in channel with afi BGP_AF_IPV4
+	// needs to be consistent with bgp.c: bgp_init
+	struct bgp_channel * bgp_ch;	// = bgp_get_channel(s->proto, BGP_AF_IPV4);
 
-	log(L_INFO "attrs.c 1047: DECODING: Neu:\n");
-	print_sces(entries);
+	  uint i;
+	  for (i = 0; i < s->proto->channel_count; i++) {
+	    if (s->proto->afi_map[i] == BGP_AF_IPV4) {
+	    	bgp_ch = s->proto->channel_map[i];
+	    }
+	  }
 
-	store_sces(entries);
 
-	log(L_INFO "attrs.c 1079: DECODING: FINISH\n");
+	store_sces(entries, &(bgp_ch->c));
 
 //	bgp_set_attr_data(to, s->pool, BA_SCHEDULED, flags, data, len);
 }
@@ -2040,7 +2042,7 @@ bgp_rte_better(rte *new, rte *old)
   if (n < o)
     return 1;
 
- /* Start with local preferences */
+  /* Start with local preferences */
   x = ea_find(new->attrs->eattrs, EA_CODE(PROTOCOL_BGP, BA_LOCAL_PREF));
   y = ea_find(old->attrs->eattrs, EA_CODE(PROTOCOL_BGP, BA_LOCAL_PREF));
   n = x ? x->u.data : new_bgp->cf->default_local_pref;
