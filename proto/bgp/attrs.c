@@ -970,18 +970,22 @@ bgp_encode_scheduled(struct bgp_write_state *s, eattr *a, byte *buf, uint size)
 
 	scheduled_contact_entries * entries = load_sces();
 
+	if (!(entries)) return 0;
+
 	int num_entries = entries->number_of_entries;
 	if (num_entries == 0) return 0;
 
 	byte flags = a->flags;  // C0 --> optional & transitive
-	int len = bgp_put_attr_hdr3(buf, BA_SCHEDULED, flags, num_entries*14);	// every scheduled_contact_entry has a size of 14 byte
+	int len = bgp_put_attr_hdr3(buf, BA_SCHEDULED, flags, num_entries* SCE_SIZE );	// every scheduled_contact_entry has a size of 22 byte
 
 	for (int i = 0; i < num_entries; i++) {
 		scheduled_contact_entry *entry = (entries->entries+i);
 		u32 start_time = entry->start_time;
 		u16 duration = entry->duration;
 		u32 asn1 = entry->asn1;
+		u32 gw1 = entry->gw1;
 		u32 asn2 = entry->asn2;
+		u32 gw2 = entry->gw2;
 
 		// start_time:		32 bit
 		put_u32(buf+len, start_time);
@@ -995,11 +999,17 @@ bgp_encode_scheduled(struct bgp_write_state *s, eattr *a, byte *buf, uint size)
 		put_u32(buf+len, asn1);
 		len += 4;
 
+		put_u32(buf+len, gw1);
+		len += 4;
+
 		// asn2:			32 bit ASN
 		put_u32(buf+len, asn2);
 		len += 4;
+
+		put_u32(buf+len, gw2);
+		len += 4;
 	}
-	// total length of one scheduled contact entry: 14 byte
+	// total length of one scheduled contact entry: 22 byte
 
 //	log(L_INFO "attrs.c 1079: ENCODING: FINISH\n");
 	return len;
@@ -1010,7 +1020,7 @@ static void
 bgp_decode_scheduled(struct bgp_parse_state *s, uint code, uint flags, byte *data, uint len, ea_list **to)
 {
 //	log(L_INFO "attrs.c 1079: DECODING: START");
-	int num_of_entries = len/14;
+	int num_of_entries = len/SCE_SIZE;
 
 	int pos = 0;
 	// TODO: check if it is in valid format
@@ -1028,13 +1038,21 @@ bgp_decode_scheduled(struct bgp_parse_state *s, uint code, uint flags, byte *dat
 		u32 asn1 = get_u32(data + pos);
 		pos += 4;
 
+		u32 gw1 = get_u32(data + pos);
+		pos += 4;
+
 		u32 asn2 = get_u32(data + pos);
+		pos += 4;
+
+		u32 gw2 = get_u32(data + pos);
 		pos += 4;
 
 		(entry_array+i)->start_time = start_time;
 		(entry_array+i)->duration = duration;
 		(entry_array+i)->asn1 = asn1;
+		(entry_array+i)->gw1 = gw1;
 		(entry_array+i)->asn2 = asn2;
+		(entry_array+i)->gw2 = gw2;
 	}
 	entries->number_of_entries = num_of_entries;
 	entries->entries = entry_array;
@@ -1050,8 +1068,7 @@ bgp_decode_scheduled(struct bgp_parse_state *s, uint code, uint flags, byte *dat
 	    }
 	  }
 
-
-	store_sces(entries, &(bgp_ch->c));
+	store_sces(entries, &(bgp_ch->c), s->proto);
 
 //	bgp_set_attr_data(to, s->pool, BA_SCHEDULED, flags, data, len);
 }

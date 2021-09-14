@@ -7,6 +7,7 @@
 #include "lib/timer.h"
 #include "nest/protocol.h"
 #include "nest/route.h" // for rte_better
+#include "nest/iface.h" // for neighbor
 
 
 
@@ -16,6 +17,8 @@
  */
 
 eattr * build_attr(u32 * as_path, u8 sizeofpath) {
+
+	as_path = kick_first_segment(as_path, --sizeofpath);
 
 	eattr * new_attr = malloc(sizeof(eattr));
 	adata * new_data = malloc(sizeof(adata) + (4*sizeofpath));
@@ -133,6 +136,30 @@ u32 * extend_as_path(u32 * as_path, u8 index, u8 num_segments, u32 asn) {
 	return new_as_path;
 }
 
+u32 * add_first_segment(u32 * as_path, u8 num_segments, u32 asn) {
+	u32 * new_as_path = malloc(num_segments * 4);
+
+	for (int i = 1 ; i < num_segments; i++) {
+		new_as_path[i] = as_path[i-1];
+	}
+
+	new_as_path[0] = asn;
+
+	free(as_path);
+	return new_as_path;
+}
+
+u32 * kick_first_segment(u32 * as_path, u8 num_segments) {
+	u32 * new_as_path = malloc(num_segments * 4);
+
+	for (int i = 0 ; i < num_segments; i++) {
+		new_as_path[i] = as_path[i+1];
+	}
+
+	free(as_path);
+	return new_as_path;
+}
+
 // only supports 4 byte asn's
 u32 * get_as_path(struct eattr * as_path_attr, u8 num_of_segments) {
 	u32 * asns = malloc(num_of_segments * 4);
@@ -158,17 +185,20 @@ void print_as_path(u32 * path, u8 length) {
 }
 
 
-struct attrs_holding * insert_sce_in_path(scheduled_contact_entry * entry, struct eattr * attr, rte * routes) {
+struct attrs_holding * insert_sce_in_path(scheduled_contact_entry * entry, struct eattr * attr, rte * routes, u32 mypublicasn) {
 	// TODO: Currently only supports ASN4: 4 byte asn numbers. Do I need support for 2 Byte ASN's?
 	u32 asn1 = entry->asn1;
 	u32 asn2 = entry->asn2;
 
 	u8 num_of_segments = attr->u.ptr->data[1];
 
-	if (num_of_segments < 3) return NULL;
+	if (num_of_segments < 2) return NULL;
 
 	// get path from eattr
 	u32 * as_path = get_as_path(attr, num_of_segments);
+
+	// add own asn to path
+	as_path = add_first_segment(as_path, ++num_of_segments, mypublicasn);
 
 	// possible new path
 	struct eattr * new_attrs;
@@ -215,6 +245,8 @@ struct attrs_holding * insert_sce_in_path(scheduled_contact_entry * entry, struc
 	free(as_path); // is extended from count section
 	num_of_segments = attr->u.ptr->data[1];
 	as_path = get_as_path(attr, num_of_segments);
+
+	as_path = add_first_segment(as_path, ++num_of_segments, mypublicasn);
 
 	// add new paths as eattr
 	for (int i = 0; i < num_of_segments; i++) {
@@ -277,7 +309,34 @@ void print_rte_infos(rte * r) {
 			r->id, r->flags, r->pflags, r->pref, r->u.krt.src, r->u.krt.proto, r->u.krt.seen, r->u.krt.best, r->u.krt.metric );
 }
 
-rte * copy_rte_and_insert_as_path(rte * rt, struct eattr * new_as_path) {
+struct nexthop * create_next_hop(struct nexthop * old_nh, struct bgp_proto * p, scheduled_contact_entry * entry) {
+
+	ip_addr * nh = malloc(sizeof(nh));
+
+	if (entry->asn1 == p->public_as) {
+		*nh = ipa_from_ip4( entry->gw1  );
+	} else if (entry->asn2 == p->public_as ) {
+		*nh = ipa_from_ip4( entry->gw2 );
+	} else {
+		// print error message: no matching asn
+	}
+
+	neighbor * neigh = NULL;
+	neigh =	neigh_find(&p->p, *nh, NULL, 0);
+
+	if ( !(neigh) ) log(L_INFO "Did not find an interface for IP Address: %x (hex)", nh->addr[3]);
+
+	struct nexthop * new_nh = malloc(sizeof(struct nexthop));
+
+	new_nh->gw = neigh->addr;
+	new_nh->iface = neigh->iface;
+
+	nexthop_insert(old_nh, new_nh);
+
+	return nexthop_sort(new_nh);
+}
+
+rte * copy_rte_and_insert_as_path(rte * rt, struct eattr * new_as_path, struct bgp_proto * p, scheduled_contact_entry * entry) {
 
 	ea_list * eal_old = rt->attrs->eattrs;
 	ea_list * eal_new = NULL;
@@ -295,6 +354,14 @@ rte * copy_rte_and_insert_as_path(rte * rt, struct eattr * new_as_path) {
 	eattr * old_attr = ea_find(eal_new, EA_CODE(PROTOCOL_BGP, BA_AS_PATH));
 	*(old_attr) = *(new_as_path);
 
+	// only needs new next hop, when the first path segment differs
+	_Bool needs_new_nh = 0;
+
+	u32 * new_as = get_as_path(new_as_path, (new_as_path->u.ptr->length - 2)/4 );
+	eattr * old_path_attr = ea_find(eal_old, EA_CODE(PROTOCOL_BGP, BA_AS_PATH));
+	u32 * old_as = get_as_path(old_path_attr, (old_path_attr->u.ptr->length - 2)/4 );
+
+	if (new_as[0] != old_as[0]) needs_new_nh = 1;
 	rta * old_rta = rt->attrs;
 //	rta * new_rta = allocz(RTA_MAX_SIZE);
 	rta * new_rta = malloc(RTA_MAX_SIZE);
@@ -315,7 +382,13 @@ rte * copy_rte_and_insert_as_path(rte * rt, struct eattr * new_as_path) {
 	new_rta->dest = RTD_UNICAST;
 //	new_rta->dest = 0;
 	new_rta->aflags = old_rta->aflags;
-	new_rta->nh = old_rta->nh;
+//	next hop creation see bgp_decode_nlri_ipv4
+	if (needs_new_nh) {
+		struct nexthop * created_nh = create_next_hop( &(old_rta->nh), p, entry );
+		new_rta->nh = *created_nh;
+	} else {
+		new_rta->nh = old_rta->nh;
+	}
 
 /*
  *     	a->source = RTS_BGP;
@@ -346,26 +419,14 @@ rte * copy_rte_and_insert_as_path(rte * rt, struct eattr * new_as_path) {
 	new_rte->u.bgp.suppressed = 0;
 	new_rte->u.bgp.stale = -1;
 
-	log(L_INFO "TESTING AFTER RTE CTEATION		START");
-
-	eattr * newattr000 = get_as_path_attr(new_rte);
-
-	if ( !(newattr000) ) log(L_INFO "Shit1");
-	else log(L_INFO "numofseg1: %u", (newattr000->u.ptr->length - 2)/4 );
-
-	u32 * newpath00 = get_as_path(newattr000, (newattr000->u.ptr->length - 2)/4);
-
-	if ( !(newpath00) ) log(L_INFO "Shit2");
-
-	print_as_path(newpath00, (newattr000->u.ptr->length - 2)/4);
-
-	log(L_INFO "TESTING AFTER RTE CTEATION		END");
-
 	return new_rte;
 }
 
 void modify_routingtable(entry_data *ed) {
 	// get table and sce and chek if exists
+	struct bgp_proto * proto = ed->proto;
+	u32 mypublicasn = proto->public_as;
+
 	struct channel * chl = ed->ch;
 	struct rtable *table;
 	scheduled_contact_entry * entry = ed->sce;
@@ -386,64 +447,14 @@ void modify_routingtable(entry_data *ed) {
 			struct eattr * as_path_attr = get_as_path_attr(oldroute);
 
 			if (as_path_attr) {
-				// TODO: Also has to append own asn to route
 
-				log(L_INFO "Reachable Network: %u.%u.%u.%u",
-					oldroute->net->n.addr[0].data[3], oldroute->net->n.addr[0].data[2],
-					oldroute->net->n.addr[0].data[1], oldroute->net->n.addr[0].data[0]);
-				print_rte_infos(oldroute);
-
-				log(L_INFO "NextHop: %u.%u.%u.%u",oldroute->attrs->nh.gw.addr[0], oldroute->attrs->nh.gw.addr[1],
-				oldroute->attrs->nh.gw.addr[2], oldroute->attrs->nh.gw.addr[3]);
-
-				if (oldroute->attrs->nh.next) {
-					log(L_INFO "NextHop->next: %u.%u.%u.%u",
-							oldroute->attrs->nh.next->gw.addr[0], oldroute->attrs->nh.next->gw.addr[1],
-							oldroute->attrs->nh.next->gw.addr[2], oldroute->attrs->nh.next->gw.addr[3]);
-				}
-				// list of new attrs or zero
-				/*
-				 * Attribute data:
-				 * 		id: 	u = 770
-				 * 		flags:	x = 40
-				 * 		type:	u = 6
-				 * 		u.data	empty
-				 * 		u.ptr->length	length of path (ASN=4) + 2
-				 * 		u.ptr->data		0x02 num_of_segments segments
-				 */
-//				log(L_INFO "\nPrint out every eattr value:\n id: %u flags: %x type: %u u.data: %u u.ptr->length: %u u.ptr->data: %x%x%x%x \n",
-//						as_path_attr->id, as_path_attr->flags, as_path_attr->type, as_path_attr->u.data, as_path_attr->u.ptr->length,
-//						as_path_attr->u.ptr->data[0], as_path_attr->u.ptr->data[1], as_path_attr->u.ptr->data[2], as_path_attr->u.ptr->data[3]);
-//				id: 770 flags: 40 type: 6 u.data: 296567392 u.ptr->length: 6 u.ptr->data: 2100
-//				bird: RTE INFOS: id: 2, flags: 1, pflags: 0, pref: 64, u.krt.src: 0, u.krt.proto: ff, u.krt.seen: 0, u.krt.best: 1, u.krt.metric: 0
-				// nexthop_insert(nexthop,  exists
-				// ea_list is build in decode attrss
-
-				attrs_holding * new_as_path_attr = insert_sce_in_path(entry, as_path_attr, n->routes);
+				attrs_holding * new_as_path_attr = insert_sce_in_path(entry, as_path_attr, n->routes, mypublicasn);
 
 				if (new_as_path_attr) {
-					log(L_INFO "sce_ext 301: new_paths: %u", new_as_path_attr->num_of_new);
 					for (int i = 0; i < new_as_path_attr->num_of_new; i++) {
 						eattr * tmp_attr = new_as_path_attr->attrs+i;
 
-						rte * new_rte = copy_rte_and_insert_as_path(oldroute, tmp_attr);
-
-						eattr * newattr000 = get_as_path_attr(new_rte);
-						eattr * oldattr000 = get_as_path_attr(oldroute);
-
-						if ( !(newattr000) || !(oldattr000) ) log(L_INFO "Shit1");
-						else log(L_INFO "numofseg1: %u numofseg2: %u",
-								(newattr000->u.ptr->length - 2)/4, (oldattr000->u.ptr->length - 2)/4 );
-
-						u32 * newpath00 = get_as_path(newattr000, (newattr000->u.ptr->length - 2)/4);
-						u32 * oldpath00 = get_as_path(oldattr000, (oldattr000->u.ptr->length - 2)/4);
-
-						if ( !(newpath00) || !(oldpath00) ) log(L_INFO "Shit2");
-
-						print_as_path(newpath00, (newattr000->u.ptr->length - 2)/4);
-						print_as_path(oldpath00, (oldattr000->u.ptr->length - 2)/4);
-
-						log(L_INFO "Is new route better? : %u", bgp_rte_better(new_rte, oldroute));
+						rte * new_rte = copy_rte_and_insert_as_path(oldroute, tmp_attr, proto, entry);
 
 						rte_update2(chl, &(oldroute->net->n.addr), new_rte, chl->proto->main_source);
 					}
@@ -458,9 +469,6 @@ void modify_routingtable(entry_data *ed) {
 
 
 
-
-
-
 /*
  * Timer Registration
  */
@@ -471,13 +479,21 @@ void modify_routingtable(entry_data *ed) {
  * One timer is registered for the start_time and the other one, when the
  * contact ends (start_time + duration)
  */
-void register_sces(scheduled_contact_entries * entries, struct channel *c) {
+void register_sces(scheduled_contact_entries * entries, struct channel *c, struct bgp_proto * proto) {
 	for (int i = 0; i < entries->number_of_entries; i++) {
 		scheduled_contact_entry * entry = (entries->entries+i);
+
+		if (entry->start_time == 0 ||
+			entry->duration == 0 ||
+			entry->asn1 == 0 ||
+			entry->gw1 == 0 ||
+			entry->asn2 == 0 ||
+			entry->gw2 == 0) return;
+
 		unsigned long begin = entry->start_time;
 		unsigned long end = entry->start_time + entry->duration;
-		register_timer(contact_begin, begin, entry, c);
-		register_timer(contact_end, end, entry, c);
+		register_timer(contact_begin, begin, entry, c, proto);
+		register_timer(contact_end, end, entry, c, proto);
 	}
 }
 
@@ -485,12 +501,15 @@ void register_sces(scheduled_contact_entries * entries, struct channel *c) {
  * function: function to be called, either contact_begin or contact_end
  * when: in milliseconds since 01.01.1970 UTC when the function should be called
  */
-timer * register_timer(void (*hook)(struct timer *), unsigned long when, scheduled_contact_entry * sce, struct channel *c) {
+timer * register_timer(void (*hook)(struct timer *),
+		unsigned long when, scheduled_contact_entry * sce, struct channel *c,
+		struct bgp_proto * proto) {
 
 	entry_data * edata = malloc(sizeof(entry_data));
 
 	edata->sce = sce;
 	edata->ch = c;
+	edata->proto = proto;
 
 	unsigned long firetime = convert_unixtime_to_secfromnow(when);
 	timer * tm = tm_new_init(NULL, hook, edata, 0, 0);
@@ -543,7 +562,7 @@ void store_sce(FILE *fd, scheduled_contact_entry *entry) {
 /*
  * Stores all sces in entries in a file named SCES_FILENAME.
  */
-void store_sces(scheduled_contact_entries *entries, struct channel *c) {
+void store_sces(scheduled_contact_entries *entries, struct channel *c, struct bgp_proto * proto) {
 
 	// merge existing sces with the new ones to store all together
 	scheduled_contact_entries * existing_sces = load_sces();
@@ -555,19 +574,28 @@ void store_sces(scheduled_contact_entries *entries, struct channel *c) {
 
 		// find the new entries that are not in the existing entries and register timers for them
 		scheduled_contact_entries * new_entries = find_new_sces(entries, existing_sces);
-		register_sces(new_entries, c);
+		register_sces(new_entries, c, proto);
 	} else {
 		all_sces = entries;
 
 		// if all entries are new (they are because there weren't existing),
 		// register new timers for every sce
-		register_sces(entries, c);
+		register_sces(entries, c, proto);
 
 	}
 
 	FILE *fd = fopen(SCES_FILENAME, "w");
 
 	for (int i = 0; i < all_sces->number_of_entries; i++) {
+		scheduled_contact_entry * entry = (all_sces->entries+i);
+
+		if (entry->start_time == 0 ||
+			entry->duration == 0 ||
+			entry->asn1 == 0 ||
+			entry->gw1 == 0 ||
+			entry->asn2 == 0 ||
+			entry->gw2 == 0) continue;
+
 		store_sce(fd, (all_sces->entries+i));
 	}
 
@@ -598,6 +626,8 @@ scheduled_contact_entries * load_sces(void) {
 
 	int num_of_entries = filesize / sizeof(scheduled_contact_entry);
 
+	if (num_of_entries < 1) return NULL;
+
 	FILE *fd = fopen(SCES_FILENAME, "rb");
 
 	scheduled_contact_entry * entry = malloc(sizeof(scheduled_contact_entry) * num_of_entries);
@@ -610,6 +640,7 @@ scheduled_contact_entries * load_sces(void) {
 	scheduled_contact_entries * sce = malloc( sizeof(scheduled_contact_entries) );
 	sce->entries = entry;
 	sce->number_of_entries = num_of_entries;
+
 	return sce;
 }
 
@@ -732,11 +763,13 @@ scheduled_contact_entries * merge_sces(scheduled_contact_entries *entries1, sche
 }
 
 void print_sces(scheduled_contact_entries *entries) {
+	if (!(entries)) return;
 	log(L_INFO "===============\nPrinting %u scheduled contact entries.", entries->number_of_entries);
 	for (int i = 0; i < entries->number_of_entries; i++) {
-		log(L_INFO "Entry %u:\n  =>  %u %u %u %u",
+		log(L_INFO "Entry %u:\n  =>  %u %u %u %u %u %u",
 				i+1, (entries->entries+i)->start_time, (entries->entries+i)->duration,
-				(entries->entries+i)->asn1, (entries->entries+i)->asn2);
+				(entries->entries+i)->asn1, (entries->entries+i)->gw1,
+				(entries->entries+i)->asn2, (entries->entries+i)->gw2);
 	}
 	log(L_INFO "===============\n");
 }

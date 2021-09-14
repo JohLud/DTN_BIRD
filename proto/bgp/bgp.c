@@ -1738,10 +1738,10 @@ bgp_init(struct proto_config *CF)
 	   */
 	  struct channel * ch = HEAD(P->channels);
 	  if (ch) {
-		  store_sces(entries,  ch);
+		  store_sces(entries,  ch, p);
 	  } else {
 		  log(L_INFO "bgc.c 1732: Channel not found");
-		  store_sces(entries, NULL);
+		  store_sces(entries, NULL, p);
 	  }
   }
 
