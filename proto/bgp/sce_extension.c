@@ -42,6 +42,30 @@ eattr * build_attr(u32 * as_path, u8 sizeofpath) {
 	return new_attr;
 }
 
+ea_list * add_nexthop_attribute(struct nexthop * nh, ea_list * eal) {
+
+	struct adata * new_attrdata = malloc( 32 );
+	new_attrdata->length = 16;
+
+	ip_addr *nh_addr = (void *) new_attrdata->data;
+	nh_addr[0] = nh->gw;
+	nh_addr[1] = IPA_NONE;
+
+	ea_list * new_list = malloc(sizeof(ea_list) + sizeof(eattr));
+	eattr * new_attr = &(new_list->attrs[0]);
+
+	new_list->flags = EALF_SORTED;
+	new_list->count = 1;
+	new_list->next = eal;
+
+	new_attr->id = 771;
+	new_attr->type = 0x4;
+	new_attr->flags = 0;
+	new_attr->u.ptr = new_attrdata;
+
+	return new_list;
+}
+
 eattr * merge_head_tail(u32 * as_path1, u8 pos1, u32 * as_path2, u8 pos2, u8 length_of_2) {
 	int MAX_as_length = (pos1 + length_of_2) * 4;
 	u32 * new_as_path = malloc(MAX_as_length);
@@ -79,7 +103,7 @@ attrs_holding * search_for_tail(u32 * as_path, u8 position, u8 num_of_segments, 
 		if (!(path_attr)) continue;
 
 		int num_of_segments_tmp = path_attr->u.ptr->data[1];
-		u32 * segments_search_in = get_as_path(path_attr, num_of_segments_tmp);
+		u32 * segments_search_in = get_as_path(path_attr);
 		for (int i = 0; i < num_of_segments_tmp; i++) {
 			if (segments_search_in[i] == search_asn
 					&& segments_search_in[i+1] != asn1) {
@@ -100,7 +124,7 @@ attrs_holding * search_for_tail(u32 * as_path, u8 position, u8 num_of_segments, 
 		if (!(path_attr)) continue;
 
 		int num_of_segments_tmp = path_attr->u.ptr->data[1];
-		u32 * segments_search_in = get_as_path(path_attr, num_of_segments_tmp);
+		u32 * segments_search_in = get_as_path(path_attr);
 
 		for (int i = 0; i < num_of_segments_tmp; i++) {
 			if (segments_search_in[i] == search_asn
@@ -161,7 +185,8 @@ u32 * kick_first_segment(u32 * as_path, u8 num_segments) {
 }
 
 // only supports 4 byte asn's
-u32 * get_as_path(struct eattr * as_path_attr, u8 num_of_segments) {
+u32 * get_as_path(struct eattr * as_path_attr) {
+	u8 num_of_segments = (as_path_attr->u.ptr->length - 2)/4;
 	u32 * asns = malloc(num_of_segments * 4);
 
 	// first byte is type and second num. of segments
@@ -195,7 +220,7 @@ struct attrs_holding * insert_sce_in_path(scheduled_contact_entry * entry, struc
 	if (num_of_segments < 2) return NULL;
 
 	// get path from eattr
-	u32 * as_path = get_as_path(attr, num_of_segments);
+	u32 * as_path = get_as_path(attr);
 
 	// add own asn to path
 	as_path = add_first_segment(as_path, ++num_of_segments, mypublicasn);
@@ -244,7 +269,7 @@ struct attrs_holding * insert_sce_in_path(scheduled_contact_entry * entry, struc
 	// reset changes to as_path
 	free(as_path); // is extended from count section
 	num_of_segments = attr->u.ptr->data[1];
-	as_path = get_as_path(attr, num_of_segments);
+	as_path = get_as_path(attr);
 
 	as_path = add_first_segment(as_path, ++num_of_segments, mypublicasn);
 
@@ -331,8 +356,7 @@ struct nexthop * create_next_hop(struct nexthop * old_nh, struct bgp_proto * p, 
 	new_nh->gw = neigh->addr;
 	new_nh->iface = neigh->iface;
 
-	nexthop_insert(old_nh, new_nh);
-
+//	nexthop_insert(&(old_nh), new_nh);
 	return nexthop_sort(new_nh);
 }
 
@@ -357,9 +381,9 @@ rte * copy_rte_and_insert_as_path(rte * rt, struct eattr * new_as_path, struct b
 	// only needs new next hop, when the first path segment differs
 	_Bool needs_new_nh = 0;
 
-	u32 * new_as = get_as_path(new_as_path, (new_as_path->u.ptr->length - 2)/4 );
+	u32 * new_as = get_as_path(new_as_path);
 	eattr * old_path_attr = ea_find(eal_old, EA_CODE(PROTOCOL_BGP, BA_AS_PATH));
-	u32 * old_as = get_as_path(old_path_attr, (old_path_attr->u.ptr->length - 2)/4 );
+	u32 * old_as = get_as_path(old_path_attr);
 
 	if (new_as[0] != old_as[0]) needs_new_nh = 1;
 	rta * old_rta = rt->attrs;
@@ -386,6 +410,7 @@ rte * copy_rte_and_insert_as_path(rte * rt, struct eattr * new_as_path, struct b
 	if (needs_new_nh) {
 		struct nexthop * created_nh = create_next_hop( &(old_rta->nh), p, entry );
 		new_rta->nh = *created_nh;
+//		new_rta->eattrs = add_nexthop_attribute( created_nh, &(new_rta->eattrs) );
 	} else {
 		new_rta->nh = old_rta->nh;
 	}
@@ -418,11 +443,23 @@ rte * copy_rte_and_insert_as_path(rte * rt, struct eattr * new_as_path, struct b
 	// see comment section
 	new_rte->u.bgp.suppressed = 0;
 	new_rte->u.bgp.stale = -1;
-
 	return new_rte;
 }
 
-void modify_routingtable(entry_data *ed) {
+void print_nexthop(rte * rt) {
+	rta * att = rt->attrs;
+	struct nexthop * nh = &(att->nh);
+
+	log(L_INFO "NEXT HOP: %x %x %x %x", nh->gw.addr[0], nh->gw.addr[1], nh->gw.addr[2], nh->gw.addr[3] );
+
+	if (nh->next) log(L_INFO "NEXT NEXT HOP exists: %x %x %x %x", nh->gw.addr[0], nh->gw.addr[1], nh->gw.addr[2], nh->gw.addr[3]);
+}
+
+/*
+ * After scheduled contact begins
+ */
+
+void modify_routingtable_add(entry_data *ed) {
 	// get table and sce and chek if exists
 	struct bgp_proto * proto = ed->proto;
 	u32 mypublicasn = proto->public_as;
@@ -436,23 +473,23 @@ void modify_routingtable(entry_data *ed) {
 
 	if ( !(table) || !(&(table->fib)) || !(entry) ) return;
 
-	int iteration = 0;
 	FIB_WALK(&(table->fib), net, n) {
 
 		rte* oldroute;
 
-		int it = 0;
 		for (oldroute = n->routes; oldroute; oldroute = oldroute->next) {
 
 			struct eattr * as_path_attr = get_as_path_attr(oldroute);
 
 			if (as_path_attr) {
 
+				// TODO: awful, find a better way to count or use realloc()!
 				attrs_holding * new_as_path_attr = insert_sce_in_path(entry, as_path_attr, n->routes, mypublicasn);
 
 				if (new_as_path_attr) {
 					for (int i = 0; i < new_as_path_attr->num_of_new; i++) {
 						eattr * tmp_attr = new_as_path_attr->attrs+i;
+						// TODO: additional attribute for next hop should be created
 
 						rte * new_rte = copy_rte_and_insert_as_path(oldroute, tmp_attr, proto, entry);
 
@@ -461,10 +498,82 @@ void modify_routingtable(entry_data *ed) {
 				}
 			}
 		}
-		iteration++;
 	}
 	FIB_WALK_END;
+}
 
+
+/*
+ * After scheduled contact ended
+ */
+
+_Bool remove_sce_from_path(scheduled_contact_entry * entry, eattr * as_path_attr, u32 mypublicasn) {
+	u32 asn1 = entry->asn1;
+	u32 asn2 = entry->asn2;
+	u8 num_segments = (as_path_attr->u.ptr->length - 2)/4;
+	u32 * path = get_as_path(as_path_attr);
+
+	path = add_first_segment(path, ++num_segments, mypublicasn);
+
+	for (int i = 0; i < num_segments; i++) {
+		if ( path[i] == asn1  && path[i+1] == asn2 ) return 1;
+		if ( path[i] == asn2  && path[i+1] == asn1 ) return 1;
+	}
+
+	return 0;
+}
+
+void modify_routingtable_remove(entry_data *ed) { return;
+	// get table and sce and chek if exists
+	struct bgp_proto * proto = ed->proto;
+	u32 mypublicasn = proto->public_as;
+
+	struct channel * chl = ed->ch;
+	struct rtable *table;
+	scheduled_contact_entry * entry = ed->sce;
+
+
+	if (chl) table = chl->table;
+	else return;
+
+	if ( !(table) || !(&(table->fib)) || !(entry) ) return;
+
+	FIB_WALK(&(table->fib), net, n) {
+
+
+		rte* oldroute;
+
+		for (oldroute = n->routes; oldroute; oldroute = oldroute->next) {
+
+
+			struct eattr * as_path_attr = get_as_path_attr(oldroute);
+
+
+			if (as_path_attr) {
+
+
+				log(L_INFO "Currently inspected route:");
+				u32 * path = get_as_path(as_path_attr);
+				print_as_path(path, (as_path_attr->u.ptr->length-2)/4);
+
+
+				_Bool routewithdraw = remove_sce_from_path(entry, as_path_attr, mypublicasn);
+				if (routewithdraw) {
+
+					struct net_addr * old = malloc(sizeof(struct net_addr));
+					*old = *(oldroute->net->n.addr);
+//					rte_free(oldroute);
+					free(oldroute->attrs);
+					free(oldroute);
+					struct network * nn = net_find(table, old);
+					if (nn) {
+						rte_update2(chl, &(oldroute->net->n.addr), NULL, chl->proto->main_source);
+					}
+				}
+			}
+		}
+	}
+	FIB_WALK_END;
 }
 
 
@@ -522,18 +631,24 @@ timer * register_timer(void (*hook)(struct timer *),
 
 void
 contact_begin(timer *t) {
-	log(L_INFO "sce_ext 27: Begin of contact!");
-
 	entry_data * ed = ((entry_data *) t->data );
 
+	log(L_INFO "Begin of contact between AS%u and AS%u !", ed->sce->asn1, ed->sce->asn2);
+
 	if (ed) {
-		modify_routingtable(ed);
+		modify_routingtable_add(ed);
 	}
 }
 
 void
 contact_end(timer *t) {
-	log(L_INFO "sce_ext 32: End of contact!");
+	entry_data * ed = ((entry_data *) t->data );
+
+	log(L_INFO "End of contact between AS%u and AS%u !", ed->sce->asn1, ed->sce->asn2);
+
+	if (ed) {
+		modify_routingtable_remove(ed);
+	}
 
 	// release resources
 	tm_stop(t);

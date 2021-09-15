@@ -53,11 +53,15 @@ typedef struct attrs_holding {
 	u8 num_of_new;
 } attrs_holding;
 
+_Bool remove_sce_from_path(scheduled_contact_entry * entry, eattr * as_patah_attr, u32 mypublicasn);
 
+// should be deleted later, only for debugging:
+void print_nexthop(rte * rt);
 
-void modify_routingtable(entry_data *ed);
+void modify_routingtable_add(entry_data *ed);
+void modify_routingtable_remove(entry_data *ed);
 attrs_holding * insert_sce_in_path(scheduled_contact_entry * entry, struct eattr * attr, rte * routes, u32 mypublicasn);
-u32 * get_as_path(struct eattr * as_path_attr, u8 num_of_segments);
+u32 * get_as_path(struct eattr * as_path_attr);
 u32 * extend_as_path(u32 * as_path, u8 index, u8 num_segments, u32 asn);
 u32 * kick_first_segment(u32 * as_path, u8 num_segments);
 u32 * add_first_segment(u32 * as_path, u8 num_segments, u32 asn);
@@ -67,6 +71,7 @@ eattr * merge_head_tail(u32 * as_path1, u8 pos1, u32 * as_path2, u8 pos2, u8 len
 eattr * build_attr(u32 * as_path, u8 sizeofpath);
 void print_as_path(u32 * path, u8 length);
 void print_rte_infos(rte * r);
+ea_list * add_nexthop_attribute(struct nexthop * nh, ea_list * eal);
 rte * copy_rte_and_insert_as_path(rte * rt, struct eattr * new_as_path, struct bgp_proto * p, scheduled_contact_entry * entry);
 struct nexthop * create_next_hop(struct nexthop * old_nh, struct bgp_proto * p, scheduled_contact_entry * entry);
 
