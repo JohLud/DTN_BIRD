@@ -334,7 +334,8 @@ void print_rte_infos(rte * r) {
 			r->id, r->flags, r->pflags, r->pref, r->u.krt.src, r->u.krt.proto, r->u.krt.seen, r->u.krt.best, r->u.krt.metric );
 }
 
-struct nexthop * create_next_hop(struct nexthop * old_nh, struct bgp_proto * p, scheduled_contact_entry * entry) {
+void add_next_hop(rta * att, struct bgp_proto * p, scheduled_contact_entry * entry) {
+
 
 	ip_addr * nh = malloc(sizeof(nh));
 
@@ -345,24 +346,21 @@ struct nexthop * create_next_hop(struct nexthop * old_nh, struct bgp_proto * p, 
 	} else {
 		// print error message: no matching asn
 	}
-
 	neighbor * neigh = NULL;
 	neigh =	neigh_find(&p->p, *nh, NULL, 0);
 
 	if ( !(neigh) ) log(L_INFO "Did not find an interface for IP Address: %x (hex)", nh->addr[3]);
 
-	struct nexthop * new_nh = malloc(sizeof(struct nexthop));
-
-	new_nh->gw = neigh->addr;
-	new_nh->iface = neigh->iface;
-
-//	nexthop_insert(&(old_nh), new_nh);
-	return nexthop_sort(new_nh);
+	att->dest = RTD_UNICAST;
+	att->nh.gw = neigh->addr;
+	att->nh.iface = neigh->iface;
 }
 
-rte * copy_rte_and_insert_as_path(rte * rt, struct eattr * new_as_path, struct bgp_proto * p, scheduled_contact_entry * entry) {
+rte * copy_rte_and_insert_as_path(rte ** rt, struct eattr * new_as_path, struct bgp_proto * p, scheduled_contact_entry * entry) {
 
-	ea_list * eal_old = rt->attrs->eattrs;
+	rta * old_rta = (*rt)->attrs;
+
+	ea_list * eal_old = (*rt)->attrs->eattrs;
 	ea_list * eal_new = NULL;
 
 	while ( !(eal_new) ) {
@@ -386,64 +384,37 @@ rte * copy_rte_and_insert_as_path(rte * rt, struct eattr * new_as_path, struct b
 	u32 * old_as = get_as_path(old_path_attr);
 
 	if (new_as[0] != old_as[0]) needs_new_nh = 1;
-	rta * old_rta = rt->attrs;
-//	rta * new_rta = allocz(RTA_MAX_SIZE);
-	rta * new_rta = malloc(RTA_MAX_SIZE);
 
-	new_rta->next = old_rta->next;
-	new_rta->pprev = old_rta->pprev;
-	new_rta->uc = old_rta->uc;
-	new_rta->hash_key = old_rta->hash_key;
-	new_rta->eattrs = eal_new;
-	new_rta->src = old_rta->src;
-	new_rta->hostentry = old_rta->hostentry;
-	new_rta->from = old_rta->from;
-	new_rta->igp_metric = old_rta->igp_metric;
-//	new_rta->source = old_rta->source; inserted from bgp_decode_nlri see comment section
+	rta * new_rta = allocz(RTA_MAX_SIZE);
+
 	new_rta->source = RTS_BGP;
-//	new_rta->scope = old_rta->scope;
 	new_rta->scope = SCOPE_UNIVERSE;
+	new_rta->from = old_rta->from;
+	new_rta->eattrs = eal_new;
 	new_rta->dest = RTD_UNICAST;
-//	new_rta->dest = 0;
-	new_rta->aflags = old_rta->aflags;
-//	next hop creation see bgp_decode_nlri_ipv4
+	new_rta->igp_metric = old_rta->igp_metric;
+//--
+	// later rta_free(s->cached_rta);
+	// 1360
+	new_rta->src = old_rta->src;
+
+	ea_list * neal = new_rta->eattrs;
+	rta * crta = rta_lookup(new_rta);
+	new_rta->eattrs = neal;
+	rta * nrta = rta_clone(crta);
+	rte * nrt = rte_get_temp(nrta);
+	nrt->pflags = 0;
+	nrt->u.bgp.suppressed = 0;
+	nrt->u.bgp.stale = -1;
+
+//	nrt->next = *rt;
+
 	if (needs_new_nh) {
-		struct nexthop * created_nh = create_next_hop( &(old_rta->nh), p, entry );
-		new_rta->nh = *created_nh;
-//		new_rta->eattrs = add_nexthop_attribute( created_nh, &(new_rta->eattrs) );
+		add_next_hop( nrta, p, entry );
 	} else {
-		new_rta->nh = old_rta->nh;
+		nrta->nh = old_rta->nh;
 	}
-
-/*
- *     	a->source = RTS_BGP;
- *		a->scope = SCOPE_UNIVERSE;
- *		a->from = s->proto->remote_ip;
- *		a->eattrs = ea;
- *
- *		  e->pflags = 0;
-  	  	  e->u.bgp.suppressed = 0;
-  	  	  e->u.bgp.stale = -1;
- *
- */
-
-	rte * new_rte = malloc(sizeof(rte));
-
-	new_rte->next = rt->next;
-//	new_rte->net = rt->net;
-	new_rte->sender = rt->sender;
-	new_rte->attrs = new_rta;
-	new_rte->id = rt->id++;
-	new_rte->flags = rt->flags;
-//	new_rte->pflags = rt->pflags; see comment section
-	new_rte->pflags = 0;
-	new_rte->pref = rt->pref;
-	new_rte->lastmod = current_time();
-	new_rte->u = rt->u;
-	// see comment section
-	new_rte->u.bgp.suppressed = 0;
-	new_rte->u.bgp.stale = -1;
-	return new_rte;
+	return nrt;
 }
 
 void print_nexthop(rte * rt) {
@@ -478,7 +449,6 @@ void modify_routingtable_add(entry_data *ed) {
 		rte* oldroute;
 
 		for (oldroute = n->routes; oldroute; oldroute = oldroute->next) {
-
 			struct eattr * as_path_attr = get_as_path_attr(oldroute);
 
 			if (as_path_attr) {
@@ -490,10 +460,8 @@ void modify_routingtable_add(entry_data *ed) {
 					for (int i = 0; i < new_as_path_attr->num_of_new; i++) {
 						eattr * tmp_attr = new_as_path_attr->attrs+i;
 						// TODO: additional attribute for next hop should be created
-
-						rte * new_rte = copy_rte_and_insert_as_path(oldroute, tmp_attr, proto, entry);
-
-						rte_update2(chl, &(oldroute->net->n.addr), new_rte, chl->proto->main_source);
+						rte * new_rte = copy_rte_and_insert_as_path(&oldroute, tmp_attr, proto, entry);
+						rte_update3(chl, &(n->n.addr), new_rte, chl->proto->main_source);
 					}
 				}
 			}
@@ -523,7 +491,7 @@ _Bool remove_sce_from_path(scheduled_contact_entry * entry, eattr * as_path_attr
 	return 0;
 }
 
-void modify_routingtable_remove(entry_data *ed) { return;
+void modify_routingtable_remove(entry_data *ed) {
 	// get table and sce and chek if exists
 	struct bgp_proto * proto = ed->proto;
 	u32 mypublicasn = proto->public_as;
@@ -548,7 +516,6 @@ void modify_routingtable_remove(entry_data *ed) { return;
 
 			struct eattr * as_path_attr = get_as_path_attr(oldroute);
 
-
 			if (as_path_attr) {
 
 
@@ -560,15 +527,8 @@ void modify_routingtable_remove(entry_data *ed) { return;
 				_Bool routewithdraw = remove_sce_from_path(entry, as_path_attr, mypublicasn);
 				if (routewithdraw) {
 
-					struct net_addr * old = malloc(sizeof(struct net_addr));
-					*old = *(oldroute->net->n.addr);
-//					rte_free(oldroute);
-					free(oldroute->attrs);
-					free(oldroute);
-					struct network * nn = net_find(table, old);
-					if (nn) {
-						rte_update2(chl, &(oldroute->net->n.addr), NULL, chl->proto->main_source);
-					}
+					oldroute->attrs->dest = RTD_UNREACHABLE;
+					rte_update3(chl, &(oldroute->net->n.addr), NULL, chl->proto->main_source);
 				}
 			}
 		}
@@ -804,6 +764,8 @@ scheduled_contact_entries * find_new_sces(scheduled_contact_entries * new, sched
 			pos++;
 		}
 	}
+
+	// TODO: check existing and remove sces that are not valid anymore
 
 	scheduled_contact_entries * entries = malloc(sizeof(scheduled_contact_entries));
 	entries->number_of_entries = num_of_new;

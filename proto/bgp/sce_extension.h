@@ -72,8 +72,8 @@ eattr * build_attr(u32 * as_path, u8 sizeofpath);
 void print_as_path(u32 * path, u8 length);
 void print_rte_infos(rte * r);
 ea_list * add_nexthop_attribute(struct nexthop * nh, ea_list * eal);
-rte * copy_rte_and_insert_as_path(rte * rt, struct eattr * new_as_path, struct bgp_proto * p, scheduled_contact_entry * entry);
-struct nexthop * create_next_hop(struct nexthop * old_nh, struct bgp_proto * p, scheduled_contact_entry * entry);
+rte * copy_rte_and_insert_as_path(rte ** rt, struct eattr * new_as_path, struct bgp_proto * p, scheduled_contact_entry * entry);
+void add_next_hop(rta * att, struct bgp_proto * p, scheduled_contact_entry * entry);
 
 scheduled_contact_entries * find_new_sces(scheduled_contact_entries * new, scheduled_contact_entries * existing);
 void register_sces(scheduled_contact_entries * entries, struct channel *c, struct bgp_proto * proto);

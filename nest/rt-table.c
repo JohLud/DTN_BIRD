@@ -1090,7 +1090,6 @@ rte_recalculate(struct channel *c, net *net, rte *new, struct rte_src *src)
   rte *old_best = net->routes;
   rte *old = NULL;
   rte **k;
-
   k = &net->routes;			/* Find and remove original route from the same protocol */
   while (old = *k)
     {
@@ -1138,7 +1137,6 @@ rte_recalculate(struct channel *c, net *net, rte *new, struct rte_src *src)
       k = &old->next;
       before_old = old;
     }
-
   /* Save the last accessed position */
   rte **pos = k;
 
@@ -1448,7 +1446,6 @@ rte_update2(struct channel *c, const net_addr *n, rte *new, struct rte_src *src)
   rte *dummy = NULL;
   net *nn;
   ASSERT(c->channel_state == CS_UP);
-
   rte_update_lock();
   if (new)
     {
@@ -1523,7 +1520,6 @@ rte_update2(struct channel *c, const net_addr *n, rte *new, struct rte_src *src)
 	  return;
 	}
     }
-
  recalc:
   /* And recalculate the best route */
   rte_hide_dummy_routes(nn, &dummy);
