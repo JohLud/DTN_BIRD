@@ -45,13 +45,13 @@ eattr * build_attr(u32 * as_path, u8 sizeofpath) {
 ea_list * add_nexthop_attribute(struct nexthop * nh, ea_list * eal) {
 
 	struct adata * new_attrdata = malloc( 32 );
-	new_attrdata->length = 16;
+	new_attrdata->length = 10;
 
 	ip_addr *nh_addr = (void *) new_attrdata->data;
 	nh_addr[0] = nh->gw;
 	nh_addr[1] = IPA_NONE;
 
-	ea_list * new_list = malloc(sizeof(ea_list) + sizeof(eattr));
+	ea_list * new_list = malloc(sizeof(ea_list) + sizeof(eattr)*2);
 	eattr * new_attr = &(new_list->attrs[0]);
 
 	new_list->flags = EALF_SORTED;
@@ -78,7 +78,7 @@ eattr * merge_head_tail(u32 * as_path1, u8 pos1, u32 * as_path2, u8 pos2, u8 len
 	}
 
 	for (int i = pos2 + 1; i < length_of_2; i++) {
-		new_as_path[pos] = as_path2[pos];
+		new_as_path[pos] = as_path2[i];
 		pos++;
 	}
 
@@ -354,6 +354,8 @@ void add_next_hop(rta * att, struct bgp_proto * p, scheduled_contact_entry * ent
 	att->dest = RTD_UNICAST;
 	att->nh.gw = neigh->addr;
 	att->nh.iface = neigh->iface;
+
+//	att->eattrs = add_nexthop_attribute(&att->nh, att->eattrs);
 }
 
 rte * copy_rte_and_insert_as_path(rte ** rt, struct eattr * new_as_path, struct bgp_proto * p, scheduled_contact_entry * entry) {
@@ -453,12 +455,12 @@ void modify_routingtable_add(entry_data *ed) {
 
 			if (as_path_attr) {
 
-				// TODO: awful, find a better way to count or use realloc()!
 				attrs_holding * new_as_path_attr = insert_sce_in_path(entry, as_path_attr, n->routes, mypublicasn);
 
 				if (new_as_path_attr) {
 					for (int i = 0; i < new_as_path_attr->num_of_new; i++) {
 						eattr * tmp_attr = new_as_path_attr->attrs+i;
+
 						// TODO: additional attribute for next hop should be created
 						rte * new_rte = copy_rte_and_insert_as_path(&oldroute, tmp_attr, proto, entry);
 						rte_update3(chl, &(n->n.addr), new_rte, chl->proto->main_source);
@@ -512,23 +514,13 @@ void modify_routingtable_remove(entry_data *ed) {
 		rte* oldroute;
 
 		for (oldroute = n->routes; oldroute; oldroute = oldroute->next) {
-
-
 			struct eattr * as_path_attr = get_as_path_attr(oldroute);
 
 			if (as_path_attr) {
-
-
-				log(L_INFO "Currently inspected route:");
-				u32 * path = get_as_path(as_path_attr);
-				print_as_path(path, (as_path_attr->u.ptr->length-2)/4);
-
-
 				_Bool routewithdraw = remove_sce_from_path(entry, as_path_attr, mypublicasn);
 				if (routewithdraw) {
 
-					oldroute->attrs->dest = RTD_UNREACHABLE;
-					rte_update3(chl, &(oldroute->net->n.addr), NULL, chl->proto->main_source);
+//					rte_update3(chl, &(n->n.addr), oldroute, chl->proto->main_source);
 				}
 			}
 		}
@@ -593,7 +585,7 @@ void
 contact_begin(timer *t) {
 	entry_data * ed = ((entry_data *) t->data );
 
-	log(L_INFO "Begin of contact between AS%u and AS%u !", ed->sce->asn1, ed->sce->asn2);
+	log(L_INFO "\n ==> Begin of contact between AS%u and AS%u !", ed->sce->asn1, ed->sce->asn2);
 
 	if (ed) {
 		modify_routingtable_add(ed);
@@ -604,7 +596,7 @@ void
 contact_end(timer *t) {
 	entry_data * ed = ((entry_data *) t->data );
 
-	log(L_INFO "End of contact between AS%u and AS%u !", ed->sce->asn1, ed->sce->asn2);
+	log(L_INFO "\n ==> End of contact between AS%u and AS%u !", ed->sce->asn1, ed->sce->asn2);
 
 	if (ed) {
 		modify_routingtable_remove(ed);
