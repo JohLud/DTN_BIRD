@@ -1979,6 +1979,9 @@ bgp_rt_notify(struct proto *P, struct channel *C, net *n, rte *new, rte *old)
 
   if (new)
   {
+
+	if (new->pflags == 0x99) return;
+
     struct ea_list *attrs = bgp_update_attrs(p, c, new, new->attrs->eattrs, bgp_linpool2);
 
     /* If attributes are invalid, we fail back to withdraw */

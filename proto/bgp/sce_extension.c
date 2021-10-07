@@ -240,7 +240,6 @@ attrs_holding * remove_duplicates(attrs_holding * attr_h) {
 
 			if (same) {
 				attr_h->num_of_new--;
-				print_as_path(tmp_path, tmp_path_len);
 				for (int del_i = i; del_i < attr_h->num_of_new; del_i++) {
 					if (attr_h->attrs+del_i + 1) {
 						*(attr_h->attrs+del_i) = *(attr_h->attrs+del_i+1);
@@ -508,6 +507,7 @@ void modify_routingtable_add(entry_data *ed) {
 
 						// TODO: additional attribute for next hop should be created
 						rte * new_rte = copy_rte_and_insert_as_path(&oldroute, tmp_attr, proto, entry);
+						new_rte->pflags = 0x99;
 						rte_update3(chl, &(n->n.addr), new_rte, chl->proto->main_source);
 					}
 				}
