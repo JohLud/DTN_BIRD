@@ -47,7 +47,7 @@ typedef struct entry_data {
 	struct bgp_proto * proto;
 } entry_data;
 
-// compoite type to pass sce and an channel to access the routingtable when timer fires
+// composite type to pass sce and an channel to access the routingtable when timer fires
 typedef struct attrs_holding {
 	struct eattr * attrs;
 	u8 num_of_new;
@@ -61,6 +61,8 @@ void print_nexthop(rte * rt);
 void modify_routingtable_add(entry_data *ed);
 void modify_routingtable_remove(entry_data *ed);
 attrs_holding * insert_sce_in_path(scheduled_contact_entry * entry, struct eattr * attr, rte * routes, u32 mypublicasn);
+attrs_holding * remove_duplicates(attrs_holding * attr_h);
+_Bool check_equal_path(u32 * path1, u8 len_path1, u32 * path2, u8 len_path2);
 u32 * get_as_path(struct eattr * as_path_attr);
 u32 * extend_as_path(u32 * as_path, u8 index, u8 num_segments, u32 asn);
 u32 * kick_first_segment(u32 * as_path, u8 num_segments);

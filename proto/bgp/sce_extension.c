@@ -209,6 +209,48 @@ void print_as_path(u32 * path, u8 length) {
 	log(L_INFO "===	END AS_Path");
 }
 
+_Bool check_equal_path(u32 * path1, u8 len_path1, u32 * path2, u8 len_path2) {
+
+	if (len_path1 != len_path2) return 0;
+	for (int i = 0 ; i < len_path1; i++) {
+		if ( *(path1+i) != *(path2+i) ) return 0;
+	}
+	return 1;
+}
+
+attrs_holding * remove_duplicates(attrs_holding * attr_h) {
+
+	if (attr_h->num_of_new < 2) return;
+
+	for (int i = 0 ; i < attr_h->num_of_new ; i++) {
+
+		eattr * curr_attr = attr_h->attrs+i;
+		u32 * curr_path = get_as_path(curr_attr);
+		u8 curr_path_len = curr_attr->u.ptr->data[1];
+
+		for (int y = 0 ; y < attr_h->num_of_new ; y++) {
+
+			if (i == y) continue;
+			eattr * tmp_attr = attr_h->attrs+y;
+			u32 * tmp_path = get_as_path(tmp_attr);
+			u8 tmp_path_len = tmp_attr->u.ptr->data[1];
+
+			_Bool same = 0;
+			same = check_equal_path(curr_path, curr_path_len, tmp_path, tmp_path_len);
+
+			if (same) {
+				attr_h->num_of_new--;
+				print_as_path(tmp_path, tmp_path_len);
+				for (int del_i = i; del_i < attr_h->num_of_new; del_i++) {
+					if (attr_h->attrs+del_i + 1) {
+						*(attr_h->attrs+del_i) = *(attr_h->attrs+del_i+1);
+					}
+				}
+			}
+		}
+	}
+}
+
 
 struct attrs_holding * insert_sce_in_path(scheduled_contact_entry * entry, struct eattr * attr, rte * routes, u32 mypublicasn) {
 	// TODO: Currently only supports ASN4: 4 byte asn numbers. Do I need support for 2 Byte ASN's?
@@ -311,6 +353,8 @@ struct attrs_holding * insert_sce_in_path(scheduled_contact_entry * entry, struc
 	attrs_holding * new_holding = malloc(sizeof(new_holding));
 	new_holding->num_of_new = num_of_new_attrs;
 	new_holding->attrs = new_attrs;
+
+	remove_duplicates(new_holding);
 
 	return new_holding;
 }
@@ -433,6 +477,7 @@ void print_nexthop(rte * rt) {
  */
 
 void modify_routingtable_add(entry_data *ed) {
+
 	// get table and sce and chek if exists
 	struct bgp_proto * proto = ed->proto;
 	u32 mypublicasn = proto->public_as;
