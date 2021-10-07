@@ -72,6 +72,7 @@ struct eattr * get_as_path_attr(rte * route);
 eattr * merge_head_tail(u32 * as_path1, u8 pos1, u32 * as_path2, u8 pos2, u8 length_of_2);
 eattr * build_attr(u32 * as_path, u8 sizeofpath);
 void print_as_path(u32 * path, u8 length);
+void print_as_path_rt(rte * r);
 void print_rte_infos(rte * r);
 ea_list * add_nexthop_attribute(struct nexthop * nh, ea_list * eal);
 rte * copy_rte_and_insert_as_path(rte ** rt, struct eattr * new_as_path, struct bgp_proto * p, scheduled_contact_entry * entry);

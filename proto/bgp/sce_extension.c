@@ -209,6 +209,16 @@ void print_as_path(u32 * path, u8 length) {
 	log(L_INFO "===	END AS_Path");
 }
 
+void print_as_path_rt(rte * r) {
+	eattr * tmp_a = get_as_path_attr(r);
+	if (!(tmp_a)) {
+		log(L_INFO "No path attribute in route!");
+		return;
+	}
+	u32 * tmp_p = get_as_path(tmp_a);
+	print_as_path(tmp_p, tmp_a->u.ptr->data[1]);
+}
+
 _Bool check_equal_path(u32 * path1, u8 len_path1, u32 * path2, u8 len_path2) {
 
 	if (len_path1 != len_path2) return 0;

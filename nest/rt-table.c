@@ -1130,6 +1130,10 @@ rte_recalculate(struct channel *c, net *net, rte *new, struct rte_src *src)
 	      rte_free_quick(new);
 	      return;
 	    }
+
+	  // we do not want to delete routes when a new route is learned via a sce
+	  if (new) if (new->pflags == 0x99) break;
+
 	  *k = old->next;
 	  table->rt_count--;
 	  break;
@@ -1355,6 +1359,9 @@ rte_recalculate(struct channel *c, net *net, rte *new, struct rte_src *src)
     {
       if (!new)
 	hmap_clear(&table->id_map, old->id);
+
+      // we do not want to delete routes when a new route is learned via a sce
+      if (new) if (new->pflags == 0x99) return;
 
       rte_free_quick(old);
     }
