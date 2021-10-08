@@ -514,9 +514,8 @@ void modify_routingtable_add(entry_data *ed) {
 				if (new_as_path_attr) {
 					for (int i = 0; i < new_as_path_attr->num_of_new; i++) {
 						eattr * tmp_attr = new_as_path_attr->attrs+i;
-
-						// TODO: additional attribute for next hop should be created
 						rte * new_rte = copy_rte_and_insert_as_path(&oldroute, tmp_attr, proto, entry);
+						// flags to identify this route in rte_announce
 						new_rte->pflags = 0x99;
 						rte_update3(chl, &(n->n.addr), new_rte, chl->proto->main_source);
 					}
@@ -565,7 +564,6 @@ void modify_routingtable_remove(entry_data *ed) {
 
 	FIB_WALK(&(table->fib), net, n) {
 
-
 		rte* oldroute;
 
 		for (oldroute = n->routes; oldroute; oldroute = oldroute->next) {
@@ -573,9 +571,11 @@ void modify_routingtable_remove(entry_data *ed) {
 
 			if (as_path_attr) {
 				_Bool routewithdraw = remove_sce_from_path(entry, as_path_attr, mypublicasn);
+				// the route contains the AS-AS pair so we remove this route
 				if (routewithdraw) {
-
-//					rte_update3(chl, &(n->n.addr), oldroute, chl->proto->main_source);
+					// flags to identify this route in rte_announce
+					oldroute->pflags = 0x77;
+					rte_update3(chl, &(n->n.addr), oldroute, chl->proto->main_source);
 				}
 			}
 		}

@@ -1091,6 +1091,49 @@ rte_recalculate(struct channel *c, net *net, rte *new, struct rte_src *src)
   rte *old = NULL;
   rte **k;
   k = &net->routes;			/* Find and remove original route from the same protocol */
+
+  /*
+   * If a route needs to be deleted, the rte new pflags are 0x77.
+   * Therefore we delete and relink routes here.
+   * After that we jump to do_recalculate to have the best route at
+   * the first position of net->routes.
+   * After that the route change is advertised.
+   */
+  if (new) if (new->pflags == 0x77) {
+
+	  // saves the old accessed route to relink
+	  rte * old_rt = net->routes;
+	  // index to identify if it is the first route that has to be deleted
+	  int rt_index = 0;
+	  for (rte * cur_rt = net->routes ; cur_rt ; cur_rt = cur_rt->next) {
+		  if (cur_rt == new) {
+
+			  // the first (best) route is deleted
+			  if (rt_index == 0) {
+				  *k = cur_rt->next;
+				  table->rt_count--;
+				  rte_free_quick(new);
+				  new = NULL;
+
+				  goto do_recalculate;
+				  break;
+			  }
+
+			  // an intermediate route is deleted
+			  // the routes must be relinked properly
+			  old_rt->next = cur_rt->next;
+			  table->rt_count--;
+			  rte_free_quick(new);
+			  new = NULL;
+
+			  goto do_recalculate;
+			  break;
+		  }
+		  old_rt = cur_rt;
+		  rt_index++;
+	  }
+  }
+
   while (old = *k)
     {
       if (old->attrs->src == src)
