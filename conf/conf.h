@@ -64,9 +64,7 @@ struct config {
   btime load_time;			/* When we've got this configuration */
 
   // EXTENSION to define scheduled contact entries
-  // TODO: define more than one
-  struct scheduled_contact_entry *sce;
-//  struct scheduled_contact_entries * sces;
+  struct scheduled_contact_entries * sces;
 };
 
 /* Please don't use these variables in protocols. Use proto_config->global instead. */

@@ -101,7 +101,7 @@ CF_KEYWORDS(GRACEFUL, RESTART, WAIT, MAX, FLUSH, AS)
 CF_KEYWORDS(MIN, IDLE, RX, TX, INTERVAL, MULTIPLIER, PASSIVE)
 CF_KEYWORDS(CHECK, LINK)
 /* own extension for the network up time information for the bpp extension */
-CF_KEYWORDS(NETWORK_UP_TIME)
+CF_KEYWORDS(SCE)
 
 /* For r_args_channel */
 CF_KEYWORDS(IPV4, IPV4_MC, IPV4_MPLS, IPV6, IPV6_MC, IPV6_MPLS, IPV6_SADR, VPN4, VPN4_MC, VPN4_MPLS, VPN6, VPN6_MC, VPN6_MPLS, ROA4, ROA6, FLOW4, FLOW6, MPLS, PRI, SEC)
@@ -133,13 +133,27 @@ CF_GRAMMAR
 /* own extension for the network up time information for the bgp extension */
 conf: ntwupti ;
 ntwupti:
-   NETWORK_UP_TIME NUM NUM NUM IP4 NUM IP4 ';' {
-	new_config->sce->start_time = $2;
-	new_config->sce->duration = $3;
-	new_config->sce->asn1 = $4;
-	new_config->sce->gw1 = ip4_to_u32($5);
-	new_config->sce->asn2 = $6;
-	new_config->sce->gw2 = ip4_to_u32($7);
+   SCE NUM NUM NUM IP4 NUM IP4 ';'
+[ntwupti] {
+	uint num_entries = new_config->sces->number_of_entries;
+	
+	scheduled_contact_entry * existing_entries = new_config->sces->entries;
+	scheduled_contact_entry * existing_plus_new_entries = cfg_allocz( sizeof(struct scheduled_contact_entry)*(num_entries+1) );
+	
+	for (int i = 0 ; i < num_entries ; i++) {
+		*(existing_plus_new_entries+i) = *(existing_entries+i);
+	}
+	
+	(existing_plus_new_entries+num_entries)->start_time = (u32) $2;
+	(existing_plus_new_entries+num_entries)->duration = (u16) $3;
+	(existing_plus_new_entries+num_entries)->asn1 = (u32) $4;
+	(existing_plus_new_entries+num_entries)->gw1 = ip4_to_u32($5);
+	(existing_plus_new_entries+num_entries)->asn2 = (u32) $6;
+	(existing_plus_new_entries+num_entries)->gw2 = ip4_to_u32($7);
+	
+	new_config->sces->entries = existing_plus_new_entries;
+	
+	new_config->sces->number_of_entries++;
    }
 ;
 

@@ -111,15 +111,11 @@ config_alloc(const char *name)
   c->tf_base = c->tf_log = TM_ISO_LONG_MS;
   c->gr_wait = DEFAULT_GR_WAIT;
   /*
-   * Extension for defining network up time
-   * later must be a set of scheduled_contact_entry
+   * Extension for defining scheduled contact entries in the configuration file
    */
-  struct scheduled_contact_entry* sce = lp_allocz(l, sizeof(struct scheduled_contact_entry));
-//  scheduled_contact_entries* sces = lp_allocz(l, sizeof(struct scheduled_contact_entry));
-//  sces->number_of_entries = 1;
-//  sces->entries = sce;
-  c->sce = sce;
-//  store_sces(sces);
+  scheduled_contact_entries * sces = lp_allocz(l, sizeof(struct scheduled_contact_entries));
+  sces->number_of_entries = 0;
+  c->sces = sces;
 
   return c;
 }
