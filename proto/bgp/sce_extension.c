@@ -632,7 +632,8 @@ timer * register_timer(void (*hook)(struct timer *),
 
 //	normal code: tm_start(tm, firetime*1000000);
 //	only for testing purposes:
-	tm_start(tm, when*1000000);
+//	tm_start(tm, when*1000000);
+	tm_start(tm, firetime*1000000);
 	return tm;
 }
 

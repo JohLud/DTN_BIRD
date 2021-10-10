@@ -1380,7 +1380,7 @@ bgp_encode_attrs(struct bgp_write_state *s, ea_list *attrs, byte *buf, byte *end
  // own extension
   eattr *myattr = malloc(sizeof(eattr));
   myattr->id = 0x99; // id of scheduled attribute
-  myattr->flags = 0xC0; // --> 1100 optional & transitive
+  myattr->flags = 0xd0; // --> 1101 optional & transitive & ext. length
   myattr->type = 0x99;
   len = bgp_encode_attr(s, myattr, pos, end - pos);
   pos += len;
