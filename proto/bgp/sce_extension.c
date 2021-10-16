@@ -961,13 +961,13 @@ scheduled_contact_entries * find_new_sces(scheduled_contact_entries * new, sched
 	int num_of_new = 0;
 
 	for (int i = 0; i < new->number_of_entries; i++) {
-		u32 sign_new = sce_signature(*(new->entries+i));
+		scheduled_contact_entry * new_e = (new->entries+i);
 		_Bool newone = 1;
 
 		// check signature of the entry against all existing signatures
 		for (int j = 0; j < existing->number_of_entries; j++) {
-			u32 sign_existing = sce_signature(*(existing->entries+j));
-			if (sign_new == sign_existing) newone = 0;
+			scheduled_contact_entry * existing_e = (existing->entries+j);
+			if (check_equal_sces(new_e, existing_e)) newone = 0;
 		}
 
 		// if newone is still 1, the sce is new
@@ -981,12 +981,12 @@ scheduled_contact_entries * find_new_sces(scheduled_contact_entries * new, sched
 	// store the new entries in entry
 	int pos = 0;
 	for (int i = 0; i < new->number_of_entries; i++) {
-		u32 sign_new = sce_signature(*(new->entries+i));
+		scheduled_contact_entry * new_e = (new->entries+i);
 		_Bool newone = 1;
 
 		for (int j = 0; j < existing->number_of_entries; j++) {
-			u32 sign_existing = sce_signature(*(existing->entries+j));
-			if (sign_new == sign_existing) newone = 0;
+			scheduled_contact_entry * existing_e = (existing->entries+j);
+			if (check_equal_sces(new_e, existing_e)) newone = 0;
 		}
 
 		// if newone is still 1, the sce is new
@@ -1007,14 +1007,36 @@ scheduled_contact_entries * find_new_sces(scheduled_contact_entries * new, sched
 
 }
 
-
 /**
- * Calculates a (far too simple) checksum for a scheduled_contact_entry for comparison.
+ * Checks if two sces are equal, if so it returns 1, otherwise 0;
  *
- * @entry: the scheduled contact entry
+ * @entry1: the first scheduled contact entry
+ * @entry2: the second scheduled contact entry
  */
-u32 sce_signature(scheduled_contact_entry entry) {
-	return entry.start_time + entry.duration + entry.asn1 + entry.asn2;
+_Bool check_equal_sces(scheduled_contact_entry * entry1, scheduled_contact_entry * entry2) {
+	if (entry1->start_time != entry2->start_time) return 0;
+	if (entry1->duration != entry2->duration) return 0;
+
+	if (entry1->asn1 != entry2->asn1 &&
+		entry1->asn1 != entry2->asn2) return 0;
+	if (entry1->asn2 != entry2->asn1 &&
+		entry1->asn2 != entry2->asn2) return 0;
+
+	if (entry1->asn1 == entry2->asn1) {
+		if (entry1->asn2 != entry2->asn2) return 0;
+	}
+	if (entry1->asn1 == entry2->asn2) {
+		if (entry1->asn2 != entry2->asn1) return 0;
+	}
+
+	if (entry1->gw1 == entry2->gw1) {
+		if (entry1->gw2 != entry2->gw2) return 0;
+	}
+	if (entry1->gw1 == entry2->gw2) {
+		if (entry1->gw2 != entry2->gw1) return 0;
+	}
+
+	return 1;
 }
 
 /**
@@ -1033,12 +1055,10 @@ scheduled_contact_entries * merge_sces(scheduled_contact_entries *entries1, sche
 	 * We test if signatures are identical.
 	 */
 	for (int i = 0; i < entries1->number_of_entries; i++) {
-		u32 signature1 = sce_signature(*(entries1->entries+i));
+		scheduled_contact_entry * e1 = (entries1->entries+i);
 		for (int j = 0; j < entries2->number_of_entries; j++) {
-			u32 signature2 = sce_signature(*(entries2->entries+j));
-			if (signature1 == signature2) {
-				duplicates++;
-			}
+			scheduled_contact_entry * e2 = (entries2->entries+j);
+			if (check_equal_sces(e1, e2)) duplicates++;
 		}
 	}
 	num_of_entries = entries1->number_of_entries + entries2->number_of_entries - duplicates;
@@ -1046,7 +1066,7 @@ scheduled_contact_entries * merge_sces(scheduled_contact_entries *entries1, sche
 	/*
 	 * first add every entry of entries1
 	 * and later add every entry of entries2, but
-	 * check is the same sce_signature is inserted yet
+	 * check if the duplicate entry is inserted
 	 * This presupposes that there are no duplicates in entry1
 	 */
 	// TODO: Pass value and assign to dereferenced pointer and not pointer to pointer
@@ -1058,13 +1078,11 @@ scheduled_contact_entries * merge_sces(scheduled_contact_entries *entries1, sche
 	for (int i = 0; i < entries2->number_of_entries; i++) {
 		// only add the entries, that are not added yet, check added entries from entries1
 		_Bool duplicate = 0;
-		u32 signature1 = sce_signature(*(entries2->entries+i));
+		scheduled_contact_entry * e1 = (entries2->entries+i);
 		// compare signature of entry2 against every signature of entry1
 		for (int j = 0; j < entries1->number_of_entries; j++) {
-			u32 signature2 = sce_signature(*(entries1->entries+j));
-			if (signature1 == signature2) {
-				duplicate = 1;	// if signature of entry1 & entry2 is identical --> duplicate --> entry2 not added
-			}
+			scheduled_contact_entry * e2 = (entries1->entries+j);
+			if (check_equal_sces(e1, e2)) duplicate = 1;	// if signature of entry1 & entry2 is identical --> duplicate --> entry2 not added
 		}
 		if (!duplicate) {
 			// FIX assignment

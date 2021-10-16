@@ -81,7 +81,7 @@ void contact_begin(timer *t);
 void contact_end(timer *t);
 unsigned long convert_unixtime_to_secfromnow(unsigned long unixtime);
 
-u32 sce_signature(scheduled_contact_entry entry);
+_Bool check_equal_sces(scheduled_contact_entry * entry1, scheduled_contact_entry * entry2);
 scheduled_contact_entries * merge_sces(scheduled_contact_entries *entries1, scheduled_contact_entries *entries2);
 void print_sces(scheduled_contact_entries *entries);
 
