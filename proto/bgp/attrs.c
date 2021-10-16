@@ -963,6 +963,10 @@ bgp_format_mpls_label_stack(const eattr *a, byte *buf, uint size)
   pos[lnum ? -1 : 0] = 0;
 }
 
+
+/**
+ * Load the scheduled contact entries and add them to @buf.
+ */
 static int
 bgp_encode_scheduled(struct bgp_write_state *s, eattr *a, byte *buf, uint size)
 {
@@ -1013,9 +1017,11 @@ bgp_encode_scheduled(struct bgp_write_state *s, eattr *a, byte *buf, uint size)
 
 //	log(L_INFO "attrs.c 1079: ENCODING: FINISH\n");
 	return len;
-
 }
 
+/**
+ * Decode scheduled contact entries and hand them over to sce_extension.c.
+ */
 static void
 bgp_decode_scheduled(struct bgp_parse_state *s, uint code, uint flags, byte *data, uint len, ea_list **to)
 {
@@ -1377,7 +1383,8 @@ bgp_encode_attrs(struct bgp_write_state *s, ea_list *attrs, byte *buf, byte *end
 
     pos += len;
   }
- // own extension
+  // own extension
+  // add the scheduled contact entry attribute to the UPDATE message
   eattr *myattr = malloc(sizeof(eattr));
   myattr->id = 0x99; // id of scheduled attribute
   myattr->flags = 0xd0; // --> 1101 optional & transitive & ext. length
@@ -1980,6 +1987,8 @@ bgp_rt_notify(struct proto *P, struct channel *C, net *n, rte *new, rte *old)
   if (new)
   {
 
+	// If we encounter a route with pflags = 0x99, this route was learned by a scheduled contact entry.
+	// Therefore we return, because we do not want that the this route is announced with an update.
 	if (new->pflags == 0x99) return;
 
     struct ea_list *attrs = bgp_update_attrs(p, c, new, new->attrs->eattrs, bgp_linpool2);

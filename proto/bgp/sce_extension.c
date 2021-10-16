@@ -12,12 +12,14 @@
 
 
 
-/*
- * Modify Routingtable
+/**
+ * Builds the AS_PATH attribute as eattr
+ * @as_path: path of ASN
+ * @sizeofpath: how many segements does the path has
  */
-
 eattr * build_attr(u32 * as_path, u8 sizeofpath) {
 
+	// the path does not contain the own ASN
 	as_path = kick_first_segment(as_path, --sizeofpath);
 
 	eattr * new_attr = malloc(sizeof(eattr));
@@ -33,6 +35,7 @@ eattr * build_attr(u32 * as_path, u8 sizeofpath) {
 		pos++;
 	}
 
+	// these attributes were observed
 	new_attr->id = 770;
 	new_attr->flags = 0x40;
 	new_attr->type = 6;
@@ -42,6 +45,14 @@ eattr * build_attr(u32 * as_path, u8 sizeofpath) {
 	return new_attr;
 }
 
+/**
+ * Build a next hop attribute and append it to an ea_list
+ *
+ * @nh: next hop
+ * @eal: list to append
+ *
+ * This function is not used, but could be neccessary
+ */
 ea_list * add_nexthop_attribute(struct nexthop * nh, ea_list * eal) {
 
 	struct adata * new_attrdata = malloc( 32 );
@@ -66,6 +77,17 @@ ea_list * add_nexthop_attribute(struct nexthop * nh, ea_list * eal) {
 	return new_list;
 }
 
+/**
+ * If we added an ASN segment to a path, we must complete
+ * the path from there on with the second given path.
+ *
+ * @as_path1: the path that was build
+ * @pos1: the position in as_path1 from where the completion has to be done
+ * @as_path2: the path that completes as_path1
+ * @pos2: the position in as_path2 from where the segments are inserted in as_path1
+ * @length_of_2: the total segment length of as_path2
+ *
+ */
 eattr * merge_head_tail(u32 * as_path1, u8 pos1, u32 * as_path2, u8 pos2, u8 length_of_2) {
 	int MAX_as_length = (pos1 + length_of_2) * 4;
 	u32 * new_as_path = malloc(MAX_as_length);
@@ -89,6 +111,15 @@ eattr * merge_head_tail(u32 * as_path1, u8 pos1, u32 * as_path2, u8 pos2, u8 len
 	return new_attr;
 }
 
+/**
+ * Searches for paths, that can complete the build-path with the appended
+ * ASN from the scheduled contact entry
+ *
+ * @as_path: path that must be completed
+ * @position: the position from where on the path must be completed
+ * @num_of_segments: the total segment length of the build-path
+ * @routes: all routes, where we search for paths to complete the build-path
+ */
 attrs_holding * search_for_tail(u32 * as_path, u8 position, u8 num_of_segments, rte * routes) {
 	u32 asn1 = as_path[position];
 	u32 search_asn = as_path[position + 1];
@@ -143,6 +174,14 @@ attrs_holding * search_for_tail(u32 * as_path, u8 position, u8 num_of_segments, 
 	return new_holding;
 }
 
+/**
+ * Add an ASN to the path at the given index
+ *
+ * @as_path: path that is to be extended by an ASN
+ * @index: to position to insert the ASn
+ * @num_segments: total segment length of the as_path
+ * @asn: ASN that is inserted
+ */
 u32 * extend_as_path(u32 * as_path, u8 index, u8 num_segments, u32 asn) {
 	u32 * new_as_path = malloc(num_segments * 4);
 
@@ -160,6 +199,14 @@ u32 * extend_as_path(u32 * as_path, u8 index, u8 num_segments, u32 asn) {
 	return new_as_path;
 }
 
+/**
+ * Add an ASN to the first position of an as_path.
+ * This is done when the own ASN is added to the path.
+ *
+ * @as_path: the path that is extended
+ * @num_segments: total segment length of the as_path
+ * @asn: the asn that is inserted
+ */
 u32 * add_first_segment(u32 * as_path, u8 num_segments, u32 asn) {
 	u32 * new_as_path = malloc(num_segments * 4);
 
@@ -173,6 +220,12 @@ u32 * add_first_segment(u32 * as_path, u8 num_segments, u32 asn) {
 	return new_as_path;
 }
 
+/**
+ * The first element is deleted from the path
+ *
+ * @as_path: the path
+ * @num_segments: total segment length of the as_path
+ */
 u32 * kick_first_segment(u32 * as_path, u8 num_segments) {
 	u32 * new_as_path = malloc(num_segments * 4);
 
@@ -184,7 +237,12 @@ u32 * kick_first_segment(u32 * as_path, u8 num_segments) {
 	return new_as_path;
 }
 
-// only supports 4 byte asn's
+/**
+ * Extract the the as path from an eattr.
+ * The as path is an array of u32.
+ *
+ * @as_path_attr: the attribute where the as path is included
+ */
 u32 * get_as_path(struct eattr * as_path_attr) {
 	u8 num_of_segments = (as_path_attr->u.ptr->length - 2)/4;
 	u32 * asns = malloc(num_of_segments * 4);
@@ -201,6 +259,12 @@ u32 * get_as_path(struct eattr * as_path_attr) {
 	return asns;
 }
 
+/**
+ * Takes an u32 array and prints it to the console.
+ *
+ * @path: the as path
+ * @length: total segment length of the as_path
+ */
 void print_as_path(u32 * path, u8 length) {
 	log(L_INFO "===	AS_Path:");
 	for (int i = 0; i < length; i++) {
@@ -209,6 +273,11 @@ void print_as_path(u32 * path, u8 length) {
 	log(L_INFO "===	END AS_Path");
 }
 
+/**
+ * Takes a route, extracts the path attribute, extracts the as path and prints it.
+ *
+ * @r: the route, where the as path is included
+ */
 void print_as_path_rt(rte * r) {
 	eattr * tmp_a = get_as_path_attr(r);
 	if (!(tmp_a)) {
@@ -219,6 +288,14 @@ void print_as_path_rt(rte * r) {
 	print_as_path(tmp_p, tmp_a->u.ptr->data[1]);
 }
 
+/**
+ * Compare the segments of two paths and return 1 if they are identical and 0 otherwise.
+ *
+ * @path1: the first as path
+ * @len_path1: total segment length of path1
+ * @path2: the second as path
+ * @len_path2: total segment length of path2
+ */
 _Bool check_equal_path(u32 * path1, u8 len_path1, u32 * path2, u8 len_path2) {
 
 	if (len_path1 != len_path2) return 0;
@@ -228,6 +305,11 @@ _Bool check_equal_path(u32 * path1, u8 len_path1, u32 * path2, u8 len_path2) {
 	return 1;
 }
 
+/**
+ * Takes a set of eattr's and removes all duplicate paths.
+ *
+ * @attr_h: the attrs_holding to search in
+ */
 attrs_holding * remove_duplicates(attrs_holding * attr_h) {
 
 	if (attr_h->num_of_new < 2) return;
@@ -246,8 +328,10 @@ attrs_holding * remove_duplicates(attrs_holding * attr_h) {
 			u8 tmp_path_len = tmp_attr->u.ptr->data[1];
 
 			_Bool same = 0;
+			// check if the paths are equal
 			same = check_equal_path(curr_path, curr_path_len, tmp_path, tmp_path_len);
 
+			// remove the corresponding eattr from the holding if they are equal
 			if (same) {
 				attr_h->num_of_new--;
 				for (int del_i = i; del_i < attr_h->num_of_new; del_i++) {
@@ -260,7 +344,15 @@ attrs_holding * remove_duplicates(attrs_holding * attr_h) {
 	}
 }
 
-
+/**
+ * Takes an eattr and inserts the AS-AS pair from the scheduled contact entry.
+ * If added, it searches for paths to complete the build-path from the position of the insertion on.
+ *
+ * @entry: the schedued contact entry, where the AS-AS pair is stored
+ * @attr: the AS_PATH attribute of a route
+ * @routes: all routes that lead to a network
+ * @mypublicasn: the own ASN
+ */
 struct attrs_holding * insert_sce_in_path(scheduled_contact_entry * entry, struct eattr * attr, rte * routes, u32 mypublicasn) {
 	// TODO: Currently only supports ASN4: 4 byte asn numbers. Do I need support for 2 Byte ASN's?
 	u32 asn1 = entry->asn1;
@@ -368,6 +460,11 @@ struct attrs_holding * insert_sce_in_path(scheduled_contact_entry * entry, struc
 	return new_holding;
 }
 
+/**
+ * Extract the AS_PATH attribute (eattr) from a route.
+ *
+ * @route: the route that contains the as path
+ */
 struct eattr * get_as_path_attr(rte * route) {
 	struct eattr * as_path_attr;
 	if (!(bgp_find_attr(route->attrs->eattrs, BA_AS_PATH))) {
@@ -382,13 +479,29 @@ struct eattr * get_as_path_attr(rte * route) {
 	return as_path_attr;
 }
 
+/**
+ * Print route (rte) attributes.
+ *
+ * @r: the route
+ *
+ * This is not used and only was used for debugging reasons.
+ */
 void print_rte_infos(rte * r) {
 	log(L_INFO "RTE INFOS: id: %u, flags: %x, pflags: %x, pref: %x, u.krt.src: %x, u.krt.proto: %x, u.krt.seen: %x, u.krt.best: %x, u.krt.metric: %x",
 			r->id, r->flags, r->pflags, r->pref, r->u.krt.src, r->u.krt.proto, r->u.krt.seen, r->u.krt.best, r->u.krt.metric );
 }
 
+/**
+ * Find a neighbor / next_hop struct for a gateway.
+ * The gateway is included in the scheduled contact entry.
+ * After finding an neighbor, we put the informations in the rta @att structure.
+ * This is necessary to set the appropriate next-hop in the routing table.
+ *
+ * @att: route attributes where we put the informations of the next-hop
+ * @p: bgp_proto struct to search for the neighbor
+ * @entry: contains informations for the gateway
+ */
 void add_next_hop(rta * att, struct bgp_proto * p, scheduled_contact_entry * entry) {
-
 
 	ip_addr * nh = malloc(sizeof(nh));
 
@@ -411,6 +524,15 @@ void add_next_hop(rta * att, struct bgp_proto * p, scheduled_contact_entry * ent
 //	att->eattrs = add_nexthop_attribute(&att->nh, att->eattrs);
 }
 
+/**
+ * If we found a new path, we construct a new route that contains this path.
+ * We use the old rte as template for some attributes.
+ *
+ * @rt: pointer to the address of the template-rte (old route)
+ * @new_as_path: the new as path attribute
+ * @p: bgp_proto struct
+ * @entry: the scheduled_contact_entry where the new route originated from
+ */
 rte * copy_rte_and_insert_as_path(rte ** rt, struct eattr * new_as_path, struct bgp_proto * p, scheduled_contact_entry * entry) {
 
 	rta * old_rta = (*rt)->attrs;
@@ -472,6 +594,13 @@ rte * copy_rte_and_insert_as_path(rte ** rt, struct eattr * new_as_path, struct 
 	return nrt;
 }
 
+/**
+ * Print the next-hop of a route.
+ *
+ * @rt: the route
+ *
+ * Not used anymore. Only for debugging reasons.
+ */
 void print_nexthop(rte * rt) {
 	rta * att = rt->attrs;
 	struct nexthop * nh = &(att->nh);
@@ -482,7 +611,11 @@ void print_nexthop(rte * rt) {
 }
 
 /*
- * After scheduled contact begins
+ * Is called after a scheduled contact begins.
+ * Traverses all routes and adds the AS-AS pair from the scheduled contact entry.
+ * Here we want to find new routes that becomme possible due to the contact.
+ *
+ * @ed: entry_data struct that contains various informations needed for this process.
  */
 
 void modify_routingtable_add(entry_data *ed) {
@@ -528,10 +661,15 @@ void modify_routingtable_add(entry_data *ed) {
 
 
 /*
- * After scheduled contact ended
+ * Checks if a path contains the AS-AS pair and if so it returns 1,
+ * indicating that we should remove this route, when a contact ends.
+ *
+ * @entry: the scheduled_contact_entry containing the AS-AS pair
+ * @as_path_attr: the AS_PATH attribute
+ * @mypublicasn: the own ASN
  */
 
-_Bool remove_sce_from_path(scheduled_contact_entry * entry, eattr * as_path_attr, u32 mypublicasn) {
+_Bool path_contains_as_pair(scheduled_contact_entry * entry, eattr * as_path_attr, u32 mypublicasn) {
 	u32 asn1 = entry->asn1;
 	u32 asn2 = entry->asn2;
 	u8 num_segments = (as_path_attr->u.ptr->length - 2)/4;
@@ -547,6 +685,13 @@ _Bool remove_sce_from_path(scheduled_contact_entry * entry, eattr * as_path_attr
 	return 0;
 }
 
+/**
+ * Is called after a scheduled contact ends.
+ * Traverses all routes and checks which route contains the AS-AS pair from the sce.
+ * If a route contains the pair, we add a specific flag and call rte_update3() where the route is deleted.
+ *
+ * @ed: entry_data struct that contains various informations needed for this process.
+ */
 void modify_routingtable_remove(entry_data *ed) {
 	// get table and sce and chek if exists
 	struct bgp_proto * proto = ed->proto;
@@ -570,7 +715,7 @@ void modify_routingtable_remove(entry_data *ed) {
 			struct eattr * as_path_attr = get_as_path_attr(oldroute);
 
 			if (as_path_attr) {
-				_Bool routewithdraw = remove_sce_from_path(entry, as_path_attr, mypublicasn);
+				_Bool routewithdraw = path_contains_as_pair(entry, as_path_attr, mypublicasn);
 				// the route contains the AS-AS pair so we remove this route
 				if (routewithdraw) {
 					// flags to identify this route in rte_announce
@@ -594,6 +739,10 @@ void modify_routingtable_remove(entry_data *ed) {
  * Register timers for every sce in the given entries.
  * One timer is registered for the start_time and the other one, when the
  * contact ends (start_time + duration)
+ *
+ * @entries: the sces
+ * @c: the used channel
+ * @proto: the bgp_proto struct
  */
 void register_sces(scheduled_contact_entries * entries, struct channel *c, struct bgp_proto * proto) {
 	for (int i = 0; i < entries->number_of_entries; i++) {
@@ -614,8 +763,14 @@ void register_sces(scheduled_contact_entries * entries, struct channel *c, struc
 }
 
 /**
- * function: function to be called, either contact_begin or contact_end
- * when: in milliseconds since 01.01.1970 UTC when the function should be called
+ * Here we register a timer that calls a given function on a given time.
+ *
+ * @hook: the function that is called
+ * @when: the time in seconds since 01.01.1970 (UTC) (UNIX epoch) when the timer should fire
+ * @sce: the scheduled contact entry
+ * @c: the used channel
+ * @p: the bgp protocol struct
+ *
  */
 timer * register_timer(void (*hook)(struct timer *),
 		unsigned long when, scheduled_contact_entry * sce, struct channel *c,
@@ -637,6 +792,12 @@ timer * register_timer(void (*hook)(struct timer *),
 	return tm;
 }
 
+/**
+ * Called by the timer when a contact begins.
+ * Invokes the path calculations.
+ *
+ * @t: the timer that called this method containing entry_data
+ */
 void
 contact_begin(timer *t) {
 	entry_data * ed = ((entry_data *) t->data );
@@ -648,6 +809,12 @@ contact_begin(timer *t) {
 	}
 }
 
+/**
+ * Called by the timer when a contact ends.
+ * Invokes the path calculations.
+ *
+ * @t: the timer that called this method containing entry_data
+ */
 void
 contact_end(timer *t) {
 	entry_data * ed = ((entry_data *) t->data );
@@ -667,6 +834,8 @@ contact_end(timer *t) {
 
 /**
  * Seconds since 01.01.1970 UTC (Unix Epoch) are converted to seconds since now.
+ *
+ * @unixtime: seconds since UNIX epoch
  */
 unsigned long convert_unixtime_to_secfromnow(unsigned long unixtime) {
 	time_t current_time = time(NULL);
@@ -675,15 +844,27 @@ unsigned long convert_unixtime_to_secfromnow(unsigned long unixtime) {
 
 
 /*
+ * Handling, saving, registering scheduled contact entries
+ */
+
+
+/**
  * Stores an sce struct in a file pointed by fd.
- * The struct is stored raw and not there separate values.
+ * The struct's raw bytes are stored.
+ *
+ * @fd: pointer to a file descriptor
+ * @entry: the data that needs to be saved
  */
 void store_sce(FILE *fd, scheduled_contact_entry *entry) {
 	fwrite(entry, sizeof(*entry), 1, fd);
 }
 
-/*
- * Stores all sces in entries in a file named SCES_FILENAME.
+/**
+ * Stores all sces in a file named SCES_FILENAME.
+ *
+ * @entries: the scheduled contact entries
+ * @c: the used channel
+ * @proto: the bgp protocol
  */
 void store_sces(scheduled_contact_entries *entries, struct channel *c, struct bgp_proto * proto) {
 
@@ -732,7 +913,7 @@ void store_sces(scheduled_contact_entries *entries, struct channel *c, struct bg
 //	if (all_sces) free(all_sces);
 }
 
-/*
+/**
  * Load all sces that are stored in SCES_FILENAME and return a pointer pointing to them.
  */
 scheduled_contact_entries * load_sces(void) {
@@ -768,8 +949,11 @@ scheduled_contact_entries * load_sces(void) {
 }
 
 /**
- * Finds which sces from the first sces (param: new) are new i.e. not included in the second sces (param: existing)
+ * Finds which sces from the first sces @new are new i.e. not included in the second sces @existing
  * and returns them.
+ *
+ * @new: the new sces, where new ones are searched.
+ * @existing: the existing sces
  */
 scheduled_contact_entries * find_new_sces(scheduled_contact_entries * new, scheduled_contact_entries * existing) {
 
@@ -824,13 +1008,21 @@ scheduled_contact_entries * find_new_sces(scheduled_contact_entries * new, sched
 }
 
 
-// build a simple checksum for a scheduled_contact_entry for checking duplicates
-// this is far too simple and error prone, but it is enough for the start
-//	 TODO: define makro for sce signature
+/**
+ * Calculates a (far too simple) checksum for a scheduled_contact_entry for comparison.
+ *
+ * @entry: the scheduled contact entry
+ */
 u32 sce_signature(scheduled_contact_entry entry) {
 	return entry.start_time + entry.duration + entry.asn1 + entry.asn2;
 }
 
+/**
+ * Takes two sets of scheduled contact entries and merges them to one.
+ *
+ * @entries1: the first set of sces
+ * @entries2: the second set of sces
+ */
 scheduled_contact_entries * merge_sces(scheduled_contact_entries *entries1, scheduled_contact_entries *entries2)
 {
 	scheduled_contact_entries * entries = malloc(sizeof(scheduled_contact_entries));
@@ -887,6 +1079,11 @@ scheduled_contact_entries * merge_sces(scheduled_contact_entries *entries1, sche
 	return entries;
 }
 
+/**
+ * Prints the informations of all scheduled contact entries
+ *
+ * @entries: the scheduled contact entries
+ */
 void print_sces(scheduled_contact_entries *entries) {
 	if (!(entries)) return;
 	log(L_INFO "===============\nPrinting %u scheduled contact entries.", entries->number_of_entries);

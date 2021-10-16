@@ -1115,6 +1115,7 @@ rte_recalculate(struct channel *c, net *net, rte *new, struct rte_src *src)
 				  rte_free_quick(new);
 				  new = NULL;
 
+				  // we go to do_recalculate, to find a new best route
 				  goto do_recalculate;
 				  break;
 			  }
@@ -1126,6 +1127,7 @@ rte_recalculate(struct channel *c, net *net, rte *new, struct rte_src *src)
 			  rte_free_quick(new);
 			  new = NULL;
 
+			  // we go to do_recalculate, to find a new best route
 			  goto do_recalculate;
 			  break;
 		  }

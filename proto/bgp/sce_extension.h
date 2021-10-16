@@ -5,11 +5,6 @@
 
 #include "nest/route.h"
 
-//#include "nest/protocol.h"
-
-// EXTENSION
-// build a simple checksum for a scheduled_contact_entry
-// this is far too simple and error prone, but it is enough for the start
 #define SCES_FILENAME	"sces.bin"
 #define SCE_SIZE	22
 
@@ -40,7 +35,7 @@ typedef struct scheduled_contact_entries {
 	scheduled_contact_entry *entries;
 } scheduled_contact_entries;
 
-// compoite type to pass sce and an channel to access the routingtable when timer fires
+// composite type to pass sce and a channel to access the routing table when timer fires
 typedef struct entry_data {
 	scheduled_contact_entry * sce;
 	struct channel * ch;
@@ -53,7 +48,8 @@ typedef struct attrs_holding {
 	u8 num_of_new;
 } attrs_holding;
 
-_Bool remove_sce_from_path(scheduled_contact_entry * entry, eattr * as_patah_attr, u32 mypublicasn);
+
+_Bool path_contains_as_pair(scheduled_contact_entry * entry, eattr * as_patah_attr, u32 mypublicasn);
 
 // should be deleted later, only for debugging:
 void print_nexthop(rte * rt);
