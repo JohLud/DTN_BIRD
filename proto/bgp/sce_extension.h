@@ -6,11 +6,12 @@
 #include "nest/route.h"
 
 #define SCES_FILENAME	"sces.bin"
-#define SCE_SIZE	22
+#define SCE_SIZE	32
+#define DTNEPOCH 946684800000	// milliseconds since UNIX epoch to 01.01.2000 (UTC)
 
 /* Extension to specify one scheduled contact entry of a network
- * 	start_time: 	when will the network be reachable			32-Bit [seconds since 1.1.1970]
- * 	up_time:		how long will the network be reachable		16-Bit [seconds of open connection]
+ * 	start_time: 	when will the network be reachable			64-Bit [milliseconds since 01.01.2000 (UTC)]
+ * 	up_time:		how long will the network be reachable		64-Bit [duration of possible contact in milliseconds]
  * 	asn1:		the ASN of the first network					32-Bit [ASN]
  * 	gw1:		the network gateway in AS1 to connect to AS2	32-Bit [IPv4 address]
  * 	asn2:		the ASN of the second network					32-Bit [ASN]
@@ -20,8 +21,8 @@
  */
 // see specification of scheduled_network_entry for the right data types!
 typedef struct scheduled_contact_entry {
-	u32 start_time;
-	u16 duration;
+	u64 start_time;
+	u64 duration;
 	u32 asn1;
 	u32 gw1;
 	u32 asn2;
@@ -31,7 +32,7 @@ typedef struct scheduled_contact_entry {
 
 // set of multiple scheduled_contact_entry
 typedef struct scheduled_contact_entries {
-	int number_of_entries;
+	u16 number_of_entries;
 	scheduled_contact_entry *entries;
 } scheduled_contact_entries;
 
@@ -76,10 +77,10 @@ void add_next_hop(rta * att, struct bgp_proto * p, scheduled_contact_entry * ent
 
 scheduled_contact_entries * find_new_sces(scheduled_contact_entries * new, scheduled_contact_entries * existing);
 void register_sces(scheduled_contact_entries * entries, struct channel *c, struct bgp_proto * proto);
-timer * register_timer(void (*hook)(struct timer *), unsigned long when, scheduled_contact_entry * entry_data, struct channel *c, struct bgp_proto * proto);
+timer * register_timer(void (*hook)(struct timer *), u64 when, scheduled_contact_entry * entry_data, struct channel *c, struct bgp_proto * proto);
 void contact_begin(timer *t);
 void contact_end(timer *t);
-unsigned long convert_unixtime_to_secfromnow(unsigned long unixtime);
+u64 convert_unixtime_to_secfromnow(u64 relative_time);
 
 _Bool check_equal_sces(scheduled_contact_entry * entry1, scheduled_contact_entry * entry2);
 scheduled_contact_entries * merge_sces(scheduled_contact_entries *entries1, scheduled_contact_entries *entries2);
@@ -90,6 +91,48 @@ void store_sce(FILE *fd, scheduled_contact_entry *entry);
 //void write_15_byte(FILE *fd, byte *data);
 scheduled_contact_entries * load_sces(void);
 
+unsigned char * get_sces_cbor(unsigned int * data_size);
+
+/*
+ * Functions for CBOR support.
+ * The following code is made by Stanislav Ovsiannikov
+ * from https://github.com/naphaso/cbor-c .
+ * The Code is licensed under the Apache License 2.0
+ * URL to license: https://github.com/naphaso/cbor-c/blob/master/LICENSE
+ * The code was not modified.
+ */
+#define CBOR_TOKEN_TYPE_INT 1
+#define CBOR_TOKEN_TYPE_LONG 2
+#define CBOR_TOKEN_TYPE_MAP 3
+#define CBOR_TOKEN_TYPE_ARRAY 4
+#define CBOR_TOKEN_TYPE_STRING 5
+#define CBOR_TOKEN_TYPE_BYTES 6
+#define CBOR_TOKEN_TYPE_TAG 7
+#define CBOR_TOKEN_TYPE_SPECIAL 8
+
+#define CBOR_TOKEN_TYPE_INCOMPLETE 1000
+#define CBOR_TOKEN_TYPE_ERROR 2000
+
+struct cbor_token {
+    unsigned int type;
+    int sign;
+    unsigned int int_value;
+    unsigned long long long_value;
+    char *string_value;
+    unsigned char *bytes_value;
+    const char *error_value;
+};
+
+unsigned int cbor_read_token(unsigned char *data, unsigned int size, unsigned int offset, struct cbor_token *token);
+unsigned char *cbor_write_plong(unsigned char *data, unsigned int size, unsigned long long value);
+unsigned char *cbor_write_pint(unsigned char *data, unsigned int size, unsigned int value);
+unsigned char *cbor_write_type_size(unsigned char *data, unsigned int size, unsigned int type, unsigned int type_size);
+unsigned char *cbor_write_type_long_size(unsigned char *data, unsigned int size, unsigned int type, unsigned long long type_size);
+unsigned char *cbor_write_uint(unsigned char *data, unsigned int size, unsigned int value);
+unsigned char *cbor_write_ulong(unsigned char *data, unsigned int size, unsigned long long value);
+unsigned char *cbor_write_int(unsigned char *data, unsigned int size, int value);
+unsigned char *cbor_write_long(unsigned char *data, unsigned int size, long long value);
+unsigned char *cbor_write_array(unsigned char *data, unsigned int size, unsigned int array_size);
 
 #endif
 

@@ -970,52 +970,18 @@ bgp_format_mpls_label_stack(const eattr *a, byte *buf, uint size)
 static int
 bgp_encode_scheduled(struct bgp_write_state *s, eattr *a, byte *buf, uint size)
 {
-//	log(L_INFO "attrs.c 1079: ENCODING: START");
+	unsigned int data_size = 0;
+	unsigned char * cbor_sces = get_sces_cbor(&data_size);
 
-	scheduled_contact_entries * entries = load_sces();
+	if (cbor_sces == NULL) return 0;
+	if (data_size == 0) return 0;
 
-	if (!(entries)) return 0;
+	int len = bgp_put_attr_hdr3(buf, BA_SCHEDULED, a->flags, data_size);
 
-	int num_entries = entries->number_of_entries;
-	if (num_entries == 0) return 0;
+	memcpy(buf+len, cbor_sces, data_size);
 
-	byte flags = a->flags;  // C0 --> optional & transitive
-	int len = bgp_put_attr_hdr3(buf, BA_SCHEDULED, flags, num_entries* SCE_SIZE );	// every scheduled_contact_entry has a size of 22 byte
+	len += data_size;
 
-	for (int i = 0; i < num_entries; i++) {
-		scheduled_contact_entry *entry = (entries->entries+i);
-		u32 start_time = entry->start_time;
-		u16 duration = entry->duration;
-		u32 asn1 = entry->asn1;
-		u32 gw1 = entry->gw1;
-		u32 asn2 = entry->asn2;
-		u32 gw2 = entry->gw2;
-
-		// start_time:		32 bit
-		put_u32(buf+len, start_time);
-		len += 4;
-
-		// up_time:			16 bit
-		put_u16(buf+len, duration);
-		len += 2;
-
-		// asn1:			32 bit ASN
-		put_u32(buf+len, asn1);
-		len += 4;
-
-		put_u32(buf+len, gw1);
-		len += 4;
-
-		// asn2:			32 bit ASN
-		put_u32(buf+len, asn2);
-		len += 4;
-
-		put_u32(buf+len, gw2);
-		len += 4;
-	}
-	// total length of one scheduled contact entry: 22 byte
-
-//	log(L_INFO "attrs.c 1079: ENCODING: FINISH\n");
 	return len;
 }
 
@@ -1025,58 +991,74 @@ bgp_encode_scheduled(struct bgp_write_state *s, eattr *a, byte *buf, uint size)
 static void
 bgp_decode_scheduled(struct bgp_parse_state *s, uint code, uint flags, byte *data, uint len, ea_list **to)
 {
-//	log(L_INFO "attrs.c 1079: DECODING: START");
-	int num_of_entries = len/SCE_SIZE;
+	unsigned int offset = 0;
+	struct cbor_token token;
 
-	int pos = 0;
-	// TODO: check if it is in valid format
+	scheduled_contact_entries * entries = malloc(sizeof(scheduled_contact_entries));
 
-	scheduled_contact_entries *entries = malloc(sizeof(scheduled_contact_entries));
-	scheduled_contact_entry *entry_array = malloc(sizeof(scheduled_contact_entry)*num_of_entries);
+	offset = cbor_read_token(data, len, offset, &token);
 
-	for (int i = 0; i < num_of_entries; i++) {
-		u32 start_time = get_u32(data + pos);
-		pos += 4;
+	u16 num_of_e = token.int_value;
+	scheduled_contact_entry * new_entries = malloc(sizeof(scheduled_contact_entry) * num_of_e);
 
-		u16 duration = get_u16(data + pos);
-		pos += 2;
+	entries->number_of_entries = num_of_e;
+	entries->entries = new_entries;
 
-		u32 asn1 = get_u32(data + pos);
-		pos += 4;
+	unsigned char entries_num = 0;
+	unsigned char val_index = 0;
 
-		u32 gw1 = get_u32(data + pos);
-		pos += 4;
+	while(1) {
 
-		u32 asn2 = get_u32(data + pos);
-		pos += 4;
+		offset = cbor_read_token(data, len, offset, &token);
 
-		u32 gw2 = get_u32(data + pos);
-		pos += 4;
+        if(token.type == CBOR_TOKEN_TYPE_INCOMPLETE) {
+            break;
+        }
+        if(token.type == CBOR_TOKEN_TYPE_ERROR) {
+            break;
+        }
 
-		(entry_array+i)->start_time = start_time;
-		(entry_array+i)->duration = duration;
-		(entry_array+i)->asn1 = asn1;
-		(entry_array+i)->gw1 = gw1;
-		(entry_array+i)->asn2 = asn2;
-		(entry_array+i)->gw2 = gw2;
-	}
-	entries->number_of_entries = num_of_entries;
-	entries->entries = entry_array;
+		if(token.type == CBOR_TOKEN_TYPE_INT) {
+	        if (val_index == 0) (new_entries+entries_num)->start_time = token.int_value;
+	        if (val_index == 1) (new_entries+entries_num)->duration = token.int_value;
+	        if (val_index == 2) (new_entries+entries_num)->asn1 = token.int_value;
+	        if (val_index == 3) (new_entries+entries_num)->gw1 = token.int_value;
+	        if (val_index == 4) (new_entries+entries_num)->asn2 = token.int_value;
+	        if (val_index == 5) (new_entries+entries_num)->gw2 = token.int_value;
 
-	// get channel that contains the master4 routingtable, is in channel with afi BGP_AF_IPV4
-	// needs to be consistent with bgp.c: bgp_init
+	        if (val_index == 5) entries_num++;
+
+			val_index = (val_index + 1) % 6;
+			continue;
+	    }
+
+	    if(token.type == CBOR_TOKEN_TYPE_LONG) {
+	            if (val_index == 0) (new_entries+entries_num)->start_time = token.long_value;
+	            if (val_index == 1) (new_entries+entries_num)->duration = token.long_value;
+	            if (val_index == 2) (new_entries+entries_num)->asn1 = token.long_value;
+	            if (val_index == 3) (new_entries+entries_num)->gw1 = token.long_value;
+	            if (val_index == 4) (new_entries+entries_num)->asn2 = token.long_value;
+	            if (val_index == 5) (new_entries+entries_num)->gw2 = token.long_value;
+
+				if (val_index == 5) entries_num++;
+				val_index = (val_index + 1) % 6;
+				continue;
+	        }
+
+	        if(token.type == CBOR_TOKEN_TYPE_ARRAY) {
+	        	continue;
+	        }
+		}
+
 	struct bgp_channel * bgp_ch;	// = bgp_get_channel(s->proto, BGP_AF_IPV4);
 
-	  uint i;
-	  for (i = 0; i < s->proto->channel_count; i++) {
-	    if (s->proto->afi_map[i] == BGP_AF_IPV4) {
-	    	bgp_ch = s->proto->channel_map[i];
-	    }
+	uint i;
+	for (i = 0; i < s->proto->channel_count; i++) {
+	  if (s->proto->afi_map[i] == BGP_AF_IPV4) {
+	  	bgp_ch = s->proto->channel_map[i];
 	  }
-
+	}
 	store_sces(entries, &(bgp_ch->c), s->proto);
-
-//	bgp_set_attr_data(to, s->pool, BA_SCHEDULED, flags, data, len);
 }
 
 static void

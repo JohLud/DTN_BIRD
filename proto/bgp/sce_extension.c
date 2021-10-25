@@ -8,7 +8,7 @@
 #include "nest/protocol.h"
 #include "nest/route.h" // for rte_better
 #include "nest/iface.h" // for neighbor
-
+#include <inttypes.h> // for printing u64
 
 
 
@@ -312,7 +312,7 @@ _Bool check_equal_path(u32 * path1, u8 len_path1, u32 * path2, u8 len_path2) {
  */
 attrs_holding * remove_duplicates(attrs_holding * attr_h) {
 
-	if (attr_h->num_of_new < 2) return;
+	if (attr_h->num_of_new < 2) return NULL;
 
 	for (int i = 0 ; i < attr_h->num_of_new ; i++) {
 
@@ -755,8 +755,8 @@ void register_sces(scheduled_contact_entries * entries, struct channel *c, struc
 			entry->asn2 == 0 ||
 			entry->gw2 == 0) return;
 
-		unsigned long begin = entry->start_time;
-		unsigned long end = entry->start_time + entry->duration;
+		u64 begin = entry->start_time;
+		u64 end = entry->start_time + entry->duration;
 		register_timer(contact_begin, begin, entry, c, proto);
 		register_timer(contact_end, end, entry, c, proto);
 	}
@@ -766,14 +766,14 @@ void register_sces(scheduled_contact_entries * entries, struct channel *c, struc
  * Here we register a timer that calls a given function on a given time.
  *
  * @hook: the function that is called
- * @when: the time in seconds since 01.01.1970 (UTC) (UNIX epoch) when the timer should fire
+ * @when: the time in milliseconds since 01.01.2000 (UTC) when the timer should fire
  * @sce: the scheduled contact entry
  * @c: the used channel
  * @p: the bgp protocol struct
  *
  */
 timer * register_timer(void (*hook)(struct timer *),
-		unsigned long when, scheduled_contact_entry * sce, struct channel *c,
+		u64 when, scheduled_contact_entry * sce, struct channel *c,
 		struct bgp_proto * proto) {
 
 	entry_data * edata = malloc(sizeof(entry_data));
@@ -782,13 +782,12 @@ timer * register_timer(void (*hook)(struct timer *),
 	edata->ch = c;
 	edata->proto = proto;
 
-	unsigned long firetime = convert_unixtime_to_secfromnow(when);
+	u64 firetime = convert_unixtime_to_secfromnow(when);
 	timer * tm = tm_new_init(NULL, hook, edata, 0, 0);
 
-//	normal code: tm_start(tm, firetime*1000000);
 //	only for testing purposes:
 //	tm_start(tm, when*1000000);
-	tm_start(tm, firetime*1000000);
+	tm_start(tm, firetime*1000);
 	return tm;
 }
 
@@ -833,13 +832,13 @@ contact_end(timer *t) {
 }
 
 /**
- * Seconds since 01.01.1970 UTC (Unix Epoch) are converted to seconds since now.
+ *  milliseconds since 01.01.2000 UTC are converted to seconds since now.
  *
- * @unixtime: seconds since UNIX epoch
+ * @relative_time: milliseconds since 01.01.2000 UTC
  */
-unsigned long convert_unixtime_to_secfromnow(unsigned long unixtime) {
-	time_t current_time = time(NULL);
-	return unixtime - current_time;
+u64 convert_unixtime_to_secfromnow(u64 relative_time) {
+	u64 current_time = time(NULL) * 1000;
+	return (relative_time + DTNEPOCH) - current_time;
 }
 
 
@@ -1106,10 +1105,481 @@ void print_sces(scheduled_contact_entries *entries) {
 	if (!(entries)) return;
 	log(L_INFO "===============\nPrinting %u scheduled contact entries.", entries->number_of_entries);
 	for (int i = 0; i < entries->number_of_entries; i++) {
-		log(L_INFO "Entry %u:\n  =>  %u %u %u %u %u %u",
+		log(L_INFO "Entry %u:\n  =>  %" PRIu64 " %" PRIu64 " %u %u %u %u",
 				i+1, (entries->entries+i)->start_time, (entries->entries+i)->duration,
 				(entries->entries+i)->asn1, (entries->entries+i)->gw1,
 				(entries->entries+i)->asn2, (entries->entries+i)->gw2);
 	}
 	log(L_INFO "===============\n");
 }
+
+
+
+/*
+ * CBOR En-/Decoding of scheduled contact entries
+ */
+
+/**
+ * Encode scheduled contact entries to CBOR.
+ *
+ * @data_size: will contain the size of the data
+ */
+unsigned char * get_sces_cbor(unsigned int * data_size) {
+	scheduled_contact_entries * entries = load_sces();
+
+	if (entries == NULL) return NULL;
+
+	u16 num_of_entries = entries->number_of_entries;
+
+	if (num_of_entries == 0) return NULL;
+
+	// defines upper bound for size of CBOR data object
+	// the additional 6 byte are for possible overhead by CBOR,
+	// if all fields reach their max. values
+	u16 size = num_of_entries * (sizeof(scheduled_contact_entry) + 6);
+	unsigned char * buffer = malloc( size );
+	unsigned char * data = buffer;
+
+	data = cbor_write_array(data, size, num_of_entries);
+
+	for (u16 i = 0; i < num_of_entries; i++) {
+		scheduled_contact_entry * e = (entries->entries+i);
+
+		data = cbor_write_array(data, size, 6);
+		data = cbor_write_long(data, size, e->start_time);
+		data = cbor_write_long(data, size, e->duration);
+		data = cbor_write_int(data, size, e->asn1);
+		data = cbor_write_int(data, size, e->gw1);
+		data = cbor_write_int(data, size, e->asn2);
+		data = cbor_write_int(data, size, e->gw2);
+	}
+
+	*data_size = data - buffer;
+
+	return buffer;
+}
+
+
+
+/*
+ * Functions for CBOR support.
+ * The following code is made by Stanislav Ovsiannikov
+ * from https://github.com/naphaso/cbor-c .
+ * The Code is licensed under the Apache License 2.0
+ * URL license: https://github.com/naphaso/cbor-c/blob/master/LICENSE
+ * The code was modified between the given tags: <modified> ... </modified>.
+ */
+unsigned int cbor_read_token(unsigned char *data, unsigned int size, unsigned int offset, struct cbor_token *token) {
+    if(offset >= size) {
+        token->type = CBOR_TOKEN_TYPE_INCOMPLETE;
+        return offset;
+    }
+
+    unsigned int current_offset = offset;
+    unsigned char type = data[current_offset++];
+    unsigned char majorType = type >> 5;
+    unsigned char minorType = type & 31;
+    unsigned int length = 0;
+
+    unsigned int remaining = size - current_offset;
+
+    //printf("size %u, offset %u, remaining %u, major type %d, minor type %d\n", size, offset, remaining, majorType, minorType);
+
+    switch(majorType) {
+        case 0: // positive integer
+            if(minorType < 24) {
+                token->type = CBOR_TOKEN_TYPE_INT;
+                token->int_value = minorType;
+                token->sign = 1;
+                return current_offset;
+            } else if(minorType == 24) { // 1 byte
+                token->type = CBOR_TOKEN_TYPE_INT;
+                length = 1;
+            } else if(minorType == 25) { // 2 byte
+                token->type = CBOR_TOKEN_TYPE_INT;
+                length = 2;
+            } else if(minorType == 26) { // 4 byte
+                token->type = CBOR_TOKEN_TYPE_INT;
+                length = 4;
+            } else if(minorType == 27) { // 8 byte
+                token->type = CBOR_TOKEN_TYPE_LONG;
+                length = 8;
+            } else {
+                token->type = CBOR_TOKEN_TYPE_ERROR;
+                token->error_value = "invalid positive integer length";
+                return offset;
+            }
+            break;
+        case 1: // negative integer
+            if(minorType < 24) {
+                token->type = CBOR_TOKEN_TYPE_INT;
+                token->int_value = minorType;
+                token->sign = -1;
+                return current_offset;
+            } else if(minorType == 24) { // 1 byte
+                token->type = CBOR_TOKEN_TYPE_INT;
+                length = 1;
+            } else if(minorType == 25) { // 2 byte
+                token->type = CBOR_TOKEN_TYPE_INT;
+                length = 2;
+            } else if(minorType == 26) { // 4 byte
+                token->type = CBOR_TOKEN_TYPE_INT;
+                length = 4;
+            } else if(minorType == 27) { // 8 byte
+                token->type = CBOR_TOKEN_TYPE_LONG;
+                length = 8;
+            } else {
+                token->type = CBOR_TOKEN_TYPE_ERROR;
+                token->error_value = "invalid negative integer length";
+                return offset;
+            }
+            break;
+        case 2: // bytes
+            if(minorType < 24) {
+                token->type = CBOR_TOKEN_TYPE_BYTES;
+                token->int_value = minorType;
+            } else if(minorType == 24) {
+                token->type = CBOR_TOKEN_TYPE_BYTES;
+                length = 1;
+            } else if(minorType == 25) { // 2 byte
+                token->type = CBOR_TOKEN_TYPE_BYTES;
+                length = 2;
+            } else if(minorType == 26) { // 4 byte
+                token->type = CBOR_TOKEN_TYPE_BYTES;
+                length = 4;
+            } else if(minorType == 27) { // 8 byte
+                token->type = CBOR_TOKEN_TYPE_ERROR;
+                token->error_value = "bytes size too long";
+                return offset;
+            } else {
+                token->type = CBOR_TOKEN_TYPE_ERROR;
+                token->error_value = "invalid bytes size";
+                return offset;
+            }
+            break;
+        case 3: // string
+            if(minorType < 24) {
+                token->type = CBOR_TOKEN_TYPE_STRING;
+                token->int_value = minorType;
+            } else if(minorType == 24) {
+                token->type = CBOR_TOKEN_TYPE_STRING;
+                length = 1;
+            } else if(minorType == 25) { // 2 byte
+                token->type = CBOR_TOKEN_TYPE_STRING;
+                length = 2;
+            } else if(minorType == 26) { // 4 byte
+                token->type = CBOR_TOKEN_TYPE_STRING;
+                length = 4;
+            } else if(minorType == 27) { // 8 byte
+                token->type = CBOR_TOKEN_TYPE_ERROR;
+                token->error_value = "string too long";
+                return offset;
+            } else {
+                token->type = CBOR_TOKEN_TYPE_ERROR;
+                token->error_value = "invalid string length";
+                return offset;
+            }
+            break;
+        case 4: // array
+            if(minorType < 24) {
+                token->type = CBOR_TOKEN_TYPE_ARRAY;
+                token->int_value = minorType;
+                return current_offset;
+            } else if(minorType == 24) {
+                token->type = CBOR_TOKEN_TYPE_ARRAY;
+                length = 1;
+            } else if(minorType == 25) { // 2 byte
+                token->type = CBOR_TOKEN_TYPE_ARRAY;
+                length = 2;
+            } else if(minorType == 26) { // 4 byte
+                token->type = CBOR_TOKEN_TYPE_ARRAY;
+                length = 4;
+            } else if(minorType == 27) { // 8 byte
+                token->type = CBOR_TOKEN_TYPE_ERROR;
+                token->error_value = "array too long";
+                return offset;
+            } else {
+                token->type = CBOR_TOKEN_TYPE_ERROR;
+                token->error_value = "invalid array length";
+                return offset;
+            }
+            break;
+        case 5: // map
+            if(minorType < 24) {
+                token->type = CBOR_TOKEN_TYPE_MAP;
+                token->int_value = minorType;
+                return current_offset;
+            } else if(minorType == 24) {
+                token->type = CBOR_TOKEN_TYPE_ARRAY;
+                length = 1;
+            } else if(minorType == 25) { // 2 byte
+                token->type = CBOR_TOKEN_TYPE_ARRAY;
+                length = 2;
+            } else if(minorType == 26) { // 4 byte
+                token->type = CBOR_TOKEN_TYPE_ARRAY;
+                length = 4;
+            } else if(minorType == 27) { // 8 byte
+                token->type = CBOR_TOKEN_TYPE_ERROR;
+                token->error_value = "map too long";
+                return offset;
+            } else {
+                token->type = CBOR_TOKEN_TYPE_ERROR;
+                token->error_value = "invalid map length";
+                return offset;
+            }
+            break;
+        case 6: // tag
+            if(minorType < 24) {
+                token->type = CBOR_TOKEN_TYPE_TAG;
+                token->int_value = minorType;
+                return current_offset;
+            } else if(minorType == 24) {
+                token->type = CBOR_TOKEN_TYPE_TAG;
+                length = 1;
+            } else if(minorType == 25) { // 2 byte
+                token->type = CBOR_TOKEN_TYPE_TAG;
+                length = 2;
+            } else if(minorType == 26) { // 4 byte
+                token->type = CBOR_TOKEN_TYPE_TAG;
+                length = 4;
+            } else if(minorType == 27) { // 8 byte
+                token->type = CBOR_TOKEN_TYPE_ERROR;
+                token->error_value = "64 bit tags not supported";
+                return offset;
+            } else {
+                token->type = CBOR_TOKEN_TYPE_ERROR;
+                token->error_value = "invalid tag";
+                return offset;
+            }
+            break;
+        case 7: // special
+            if(minorType < 24) {
+                token->type = CBOR_TOKEN_TYPE_SPECIAL;
+                token->int_value = minorType;
+                return current_offset;
+            } else if(minorType == 24) {
+                token->type = CBOR_TOKEN_TYPE_SPECIAL;
+                length = 1;
+            } else if(minorType == 25) { // 2 byte
+                token->type = CBOR_TOKEN_TYPE_SPECIAL;
+                length = 2;
+            } else if(minorType == 26) { // 4 byte
+                token->type = CBOR_TOKEN_TYPE_SPECIAL;
+                length = 4;
+            } else if(minorType == 27) { // 8 byte
+                token->type = CBOR_TOKEN_TYPE_ERROR;
+                token->error_value = "64 bit specials not supported";
+                return offset;
+            } else {
+                token->type = CBOR_TOKEN_TYPE_ERROR;
+                token->error_value = "invalid special value";
+                return offset;
+            }
+            break;
+        default:
+            token->type = CBOR_TOKEN_TYPE_ERROR;
+            token->error_value = "unknown error";
+            return offset;
+    }
+
+    if(length > 0) {
+        if(remaining < length) {
+            token->type = CBOR_TOKEN_TYPE_INCOMPLETE;
+            return offset;
+        }
+
+        switch(length) {
+            case 1:
+                token->int_value = data[current_offset];
+                break;
+            case 2:
+                token->int_value = ((unsigned short)data[current_offset] << 8) | ((unsigned short)data[current_offset + 1]);
+                break;
+            case 4:
+                token->int_value = ((unsigned int)data[current_offset] << 24) | ((unsigned int)data[current_offset + 1] << 16) | ((unsigned int)data[current_offset + 2] << 8) | ((unsigned int)data[current_offset + 3]);
+                break;
+            case 8:
+                token->long_value = ((unsigned long long)data[current_offset] << 56) | ((unsigned long long)data[current_offset +1] << 48) | ((unsigned long long)data[current_offset +2] << 40) | ((unsigned long long)data[current_offset +3] << 32) | ((unsigned long long)data[current_offset +4] << 24) | ((unsigned long long)data[current_offset +5] << 16) | ((unsigned long long)data[current_offset +6] << 8) | ((unsigned long long)data[current_offset +7]);
+                if(majorType == 0) {
+                    token->sign = 1;
+                } else if(majorType == 1) {
+                    token->sign = -1;
+                }
+                return current_offset + 8;
+        }
+
+        current_offset += length;
+        remaining = size - current_offset;
+    }
+
+    switch(majorType) {
+        case 0: // positive integer
+            token->sign = 1;
+            return current_offset;
+        case 1: // negative integer
+            token->sign = -1;
+            return current_offset;
+        case 2: // bytes
+            if(remaining < token->int_value) {
+                token->type = CBOR_TOKEN_TYPE_INCOMPLETE;
+                return offset;
+            } else {
+                token->type = CBOR_TOKEN_TYPE_BYTES;
+                token->bytes_value = (data + current_offset);
+                return current_offset + token->int_value;
+            }
+        case 3: // string
+            if(remaining < token->int_value) {
+                token->type = CBOR_TOKEN_TYPE_INCOMPLETE;
+                return offset;
+            } else {
+                token->type = CBOR_TOKEN_TYPE_STRING;
+                token->string_value = (char *) (data + current_offset);
+                return current_offset + token->int_value;
+            }
+        case 4: // array
+        case 5: // map
+        case 6: // tag
+        case 7: // special
+            return current_offset;
+        default:
+            token->type = CBOR_TOKEN_TYPE_ERROR;
+            token->error_value = "unknown error";
+            return offset;
+    }
+}
+
+
+unsigned char *cbor_write_type_size(unsigned char *data, unsigned int size, unsigned int type, unsigned int type_size) {
+    type <<= 5;
+    if(type_size < 24) {
+        if(size < 1) {
+            return data;
+        }
+
+        *data++ = (unsigned char) (type | type_size);
+
+        return data;
+    } else if(type_size < 256) {
+        if(size < 2) {
+            return data;
+        }
+
+        *data++ = (unsigned char) (type | 24);
+        *data++ = (unsigned char) type_size;
+
+        return data;
+    } else if(type_size < 65536) {
+        if(size < 3) {
+            return data;
+        }
+
+        *data++ = (unsigned char) (type | 25);
+        *data++ = (unsigned char) (type_size >> 8);
+        *data++ = (unsigned char) type_size;
+
+        return data;
+    } else {
+        if(size < 5) {
+            return data;
+        }
+
+        *data++ = (unsigned char) (type | 26);
+        *data++ = (unsigned char) (type_size >> 24);
+        *data++ = (unsigned char) (type_size >> 16);
+        *data++ = (unsigned char) (type_size >> 8);
+        *data++ = (unsigned char) type_size;
+
+        return data;
+    }
+}
+
+unsigned char *cbor_write_type_long_size(unsigned char *data, unsigned int size, unsigned int type, unsigned long long type_size) {
+    type <<= 5;
+    if(type_size < 24ULL) {
+        if(size < 1) {
+            return data;
+        }
+
+        *data++ = (unsigned char) (type | type_size);
+
+        return data;
+    } else if(type_size < 256ULL) {
+        if(size < 2) {
+            return data;
+        }
+
+        *data++     = (unsigned char) (type | 24);
+        *data++ = (unsigned char) type_size;
+
+        return data + 2;
+    } else if(type_size < 65536ULL) {
+        if(size < 3) {
+            return data;
+        }
+
+        *data++ = (unsigned char) (type | 25);
+        *data++ = (unsigned char) (type_size >> 8);
+        *data++ = (unsigned char) type_size;
+
+        return data;
+    } else if(type_size < 4294967296ULL) {
+        if(size < 5) {
+            return data;
+        }
+
+        *data++ = (unsigned char) (type | 26);
+        *data++ = (unsigned char) (type_size >> 24);
+        *data++ = (unsigned char) (type_size >> 16);
+        *data++ = (unsigned char) (type_size >> 8);
+        *data++ = (unsigned char) type_size;
+
+        return data;
+    } else {
+        if(size < 9) {
+            return data;
+        }
+
+        *data++ = (unsigned char) (type | 27);
+        *data++ = (unsigned char) (type_size >> 56);
+        *data++ = (unsigned char) (type_size >> 48);
+        *data++ = (unsigned char) (type_size >> 40);
+        *data++ = (unsigned char) (type_size >> 32);
+        *data++ = (unsigned char) (type_size >> 24);
+        *data++ = (unsigned char) (type_size >> 16);
+        *data++ = (unsigned char) (type_size >> 8);
+        *data++ = (unsigned char) type_size;
+
+        return data;
+    }
+}
+
+unsigned char *cbor_write_pint(unsigned char *data, unsigned int size, unsigned int value) {
+    return cbor_write_type_size(data, size, 0, value);
+}
+
+unsigned char *cbor_write_plong(unsigned char *data, unsigned int size, unsigned long long value) {
+    return cbor_write_type_long_size(data, size, 0, value);
+}
+
+unsigned char *cbor_write_uint(unsigned char *data, unsigned int size, unsigned int value) {
+    return cbor_write_pint(data, size, value);
+}
+
+unsigned char *cbor_write_ulong(unsigned char *data, unsigned int size, unsigned long long value) {
+    return cbor_write_plong(data, size, value);
+}
+// <modified>
+unsigned char *cbor_write_int(unsigned char *data, unsigned int size, int value) {
+    return cbor_write_pint(data, size, (unsigned int)(value));
+}
+
+unsigned char *cbor_write_long(unsigned char *data, unsigned int size, long long value) {
+    return cbor_write_plong(data, size, (unsigned long long)(value));
+}
+// </modified>
+unsigned char *cbor_write_array(unsigned char *data, unsigned int size, unsigned int array_size) {
+    return cbor_write_type_size(data, size, 4, array_size);
+}
+
+

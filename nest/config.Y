@@ -101,7 +101,7 @@ CF_KEYWORDS(GRACEFUL, RESTART, WAIT, MAX, FLUSH, AS)
 CF_KEYWORDS(MIN, IDLE, RX, TX, INTERVAL, MULTIPLIER, PASSIVE)
 CF_KEYWORDS(CHECK, LINK)
 /* own extension for the network up time information for the bpp extension */
-CF_KEYWORDS(SCE)
+CF_KEYWORDS(SCE, DTN_TIME)
 
 /* For r_args_channel */
 CF_KEYWORDS(IPV4, IPV4_MC, IPV4_MPLS, IPV6, IPV6_MC, IPV6_MPLS, IPV6_SADR, VPN4, VPN4_MC, VPN4_MPLS, VPN6, VPN6_MC, VPN6_MPLS, ROA4, ROA6, FLOW4, FLOW6, MPLS, PRI, SEC)
@@ -127,13 +127,15 @@ CF_ENUM_PX(T_ENUM_AF, AF_, AFI_, IPV4, IPV6)
 %type <net_ptr> r_args_for
 %type <t> channel_sym
 %type <c> channel_arg
+%type <i64> dtn_time
 
 CF_GRAMMAR
 
 /* own extension for the network up time information for the bgp extension */
 conf: ntwupti ;
+
 ntwupti:
-   SCE NUM NUM NUM IP4 NUM IP4 ';'
+   SCE dtn_time dtn_time NUM IP4 NUM IP4 ';'
 [ntwupti] {
 	uint num_entries = new_config->sces->number_of_entries;
 	
@@ -143,9 +145,9 @@ ntwupti:
 	for (int i = 0 ; i < num_entries ; i++) {
 		*(existing_plus_new_entries+i) = *(existing_entries+i);
 	}
-	
-	(existing_plus_new_entries+num_entries)->start_time = (u32) $2;
-	(existing_plus_new_entries+num_entries)->duration = (u16) $3;
+
+	(existing_plus_new_entries+num_entries)->start_time = (u64) $2;
+	(existing_plus_new_entries+num_entries)->duration = (u64) $3;
 	(existing_plus_new_entries+num_entries)->asn1 = (u32) $4;
 	(existing_plus_new_entries+num_entries)->gw1 = ip4_to_u32($5);
 	(existing_plus_new_entries+num_entries)->asn2 = (u32) $6;
@@ -156,6 +158,12 @@ ntwupti:
 	new_config->sces->number_of_entries++;
    }
 ;
+
+dtn_time:
+    NUM { $$ = $1; }
+  | DTNTIME { $$ = $1; }
+  ;
+
 
 /* Setting of router ID */
 

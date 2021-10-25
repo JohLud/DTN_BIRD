@@ -277,9 +277,15 @@ WHITE [ \t]
   unsigned long int l;
   errno = 0;
   l = bstrtoul10(yytext, &e);
-  if (!e || *e || errno == ERANGE || (unsigned long int)(unsigned int) l != l)
+  if (!e || *e || errno == ERANGE || (u64) l != l)
     cf_error("Number out of range");
   cf_lval.i = l;
+  
+  // Extension to allow 64 bit integers / DTNTIME is an u64 token
+  cf_lval.i64 = l;
+  if (cf_lval.i != l && l > 4294967295) {
+  	return DTNTIME;
+  }
   return NUM;
 }
 
