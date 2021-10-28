@@ -1092,6 +1092,8 @@ rte_recalculate(struct channel *c, net *net, rte *new, struct rte_src *src)
   rte **k;
   k = &net->routes;			/* Find and remove original route from the same protocol */
 
+  // do we want to delete a route because a scheduled contact ended?
+  _Bool sce_withdraw = 0;
   /*
    * If a route needs to be deleted, the rte new pflags are 0x77.
    * Therefore we delete and relink routes here.
@@ -1100,6 +1102,8 @@ rte_recalculate(struct channel *c, net *net, rte *new, struct rte_src *src)
    * After that the route change is advertised.
    */
   if (new) if (new->pflags == 0x77) {
+
+	  sce_withdraw = 1;
 
 	  // saves the old accessed route to relink
 	  rte * old_rt = net->routes;
@@ -1127,8 +1131,9 @@ rte_recalculate(struct channel *c, net *net, rte *new, struct rte_src *src)
 			  rte_free_quick(new);
 			  new = NULL;
 
-			  // we go to do_recalculate, to find a new best route
-			  goto do_recalculate;
+			  // we go to after_recalculate, because we do not need a new best route
+			  goto after_recalculate;
+
 			  break;
 		  }
 		  old_rt = cur_rt;
@@ -1358,6 +1363,8 @@ rte_recalculate(struct channel *c, net *net, rte *new, struct rte_src *src)
       /* The fourth (empty) case - suboptimal route was removed, nothing to do */
     }
 
+  after_recalculate:
+
   if (new)
     {
       new->lastmod = current_time();
@@ -1388,7 +1395,55 @@ rte_recalculate(struct channel *c, net *net, rte *new, struct rte_src *src)
     }
 
   /* Propagate the route change */
+
+  /*
+   * Extension:
+   * We set "markers" (->pflags = 0x55) to the routes, that are given to rte_announce
+   * to catch this announcement in attrs.c: after_recalculate(), to prevent
+   * that a route withdraw is announced.
+   * The original pflags value is later assigned again.
+   * This is done because we do not want UPDATES that originated from the extension.
+   */
+  int net_rt;
+  int new_rt;
+  int old_rt;
+  int old_best_rt;
+
+  if (sce_withdraw) {
+	  if (net) if (net->routes) {
+		  net_rt = net->routes->pflags;
+		  net->routes->pflags = 0x55;
+	  }
+	  if (new) {
+		  new_rt = new->pflags;
+		  new->pflags = 0x55;
+	  }
+	  if (old) {
+		  old_rt = old->pflags;
+		  old->pflags = 0x55;
+	  }
+	  if (old_best) {
+		  old_best_rt = old_best->pflags;
+		  old_best->pflags = 0x55;
+	  }
+  }
+
   rte_announce(table, RA_UNDEF, net, new, old, net->routes, old_best);
+
+  if (sce_withdraw) {
+	  if (net) if (net->routes) {
+		  net->routes->pflags = net_rt;
+	  }
+	  if (new) {
+		  new->pflags = new_rt;
+	  }
+	  if (old) {
+		  old->pflags = old_rt;
+	  }
+	  if (old_best) {
+		  old_best->pflags = old_best_rt;
+	  }
+  }
 
   if (!net->routes &&
       (table->gc_counter++ >= table->config->gc_max_ops) &&

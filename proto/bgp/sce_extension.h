@@ -75,6 +75,8 @@ ea_list * add_nexthop_attribute(struct nexthop * nh, ea_list * eal);
 rte * copy_rte_and_insert_as_path(rte ** rt, struct eattr * new_as_path, struct bgp_proto * p, scheduled_contact_entry * entry);
 void add_next_hop(rta * att, struct bgp_proto * p, scheduled_contact_entry * entry);
 
+_Bool is_unique_route(rte * route, rtable * table, u32 * ipv4_address);
+
 scheduled_contact_entries * find_new_sces(scheduled_contact_entries * new, scheduled_contact_entries * existing);
 void register_sces(scheduled_contact_entries * entries, struct channel *c, struct bgp_proto * proto);
 timer * register_timer(void (*hook)(struct timer *), u64 when, scheduled_contact_entry * entry_data, struct channel *c, struct bgp_proto * proto);

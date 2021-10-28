@@ -976,7 +976,12 @@ bgp_encode_scheduled(struct bgp_write_state *s, eattr *a, byte *buf, uint size)
 	if (cbor_sces == NULL) return 0;
 	if (data_size == 0) return 0;
 
-	int len = bgp_put_attr_hdr3(buf, BA_SCHEDULED, a->flags, data_size);
+	int len;
+
+	if (data_size < 256)
+		len = bgp_put_attr_hdr3(buf, BA_SCHEDULED, a->flags, data_size);
+	else
+		len = bgp_put_attr_hdr4(buf, BA_SCHEDULED, a->flags, data_size);
 
 	memcpy(buf+len, cbor_sces, data_size);
 
@@ -1965,6 +1970,16 @@ bgp_rt_notify(struct proto *P, struct channel *C, net *n, rte *new, rte *old)
   struct bgp_bucket *buck;
   struct bgp_prefix *px;
   u32 path;
+
+  /*
+   * If we encounter the marker 0x55 in any route, this announcement
+   * originated from the extension because of a route deletion.
+   * Therefore we do not want that this results in an UPDATE, so we return.
+   */
+  //
+  if (new) if (new->pflags == 0x55)  return;
+  if (old) if (old->pflags == 0x55) return;
+  if (n) if (n->routes) if (n->routes->pflags == 0x55) return;
 
   if (new)
   {

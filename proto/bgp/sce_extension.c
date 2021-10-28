@@ -610,6 +610,58 @@ void print_nexthop(rte * rt) {
 	if (nh->next) log(L_INFO "NEXT NEXT HOP exists: %x %x %x %x", nh->gw.addr[0], nh->gw.addr[1], nh->gw.addr[2], nh->gw.addr[3]);
 }
 
+/**
+ * Check if the new route is unique among all others.
+ * Check with the path, the destination and the next-hop.
+ *
+ * @rt: the route that is checked for uniqueness
+ * @table: the table in which to search for
+ * @ ipv4address: the destination network's IPv4 address
+ */
+_Bool is_unique_route(rte * rt, rtable * table, u32 * ipv4_address) {
+
+	if (rt == NULL || table == NULL || ipv4_address == NULL) return 0;
+
+	// get AS_PATH
+	eattr * new_as_path_attr = get_as_path_attr(rt);
+	if (new_as_path_attr == NULL) return 0;
+	u8 new_len_as_path = new_as_path_attr->u.ptr->data[1];
+	u32 * new_as_path = get_as_path(new_as_path_attr);
+
+	// get Next-Hop
+	u32 * new_nh = &rt->attrs->nh.gw.addr[0];
+
+	FIB_WALK(&(table->fib), net, n) {
+		rte* oldroute;
+		for (oldroute = n->routes; oldroute; oldroute = oldroute->next) {
+			// get AS_PATH
+			eattr * old_as_path_attr = get_as_path_attr(oldroute);
+			if (old_as_path_attr == NULL) continue;
+			u8 old_len_as_path = old_as_path_attr->u.ptr->data[1];
+			u32 * old_as_path = get_as_path(old_as_path_attr);
+
+			// get Next-Hop
+			u32 * old_nh = &rt->attrs->nh.gw.addr[0];
+			_Bool same_nh = (new_nh[0] == old_nh[0]) && (new_nh[1] == old_nh[1])
+							&& (new_nh[2] == old_nh[2]) && (new_nh[3] == old_nh[3]);
+
+			// get IPv4 address (destination network)
+			u8 * old_net_ip = &oldroute->net->n.addr[0].data;
+			// cast the u8 pointer to an u32 pointer to get access to the whole 32 bit IPv4 address in the array
+			_Bool same_ip = *(ipv4_address) == *((u32 *) old_net_ip);
+
+			if (same_nh && same_ip &&
+				check_equal_path(new_as_path, new_len_as_path, old_as_path, old_len_as_path) ) {
+				return 0;
+			}
+
+		}
+	}
+	FIB_WALK_END;
+
+	return 1;
+}
+
 /*
  * Is called after a scheduled contact begins.
  * Traverses all routes and adds the AS-AS pair from the scheduled contact entry.
@@ -633,6 +685,8 @@ void modify_routingtable_add(entry_data *ed) {
 
 	if ( !(table) || !(&(table->fib)) || !(entry) ) return;
 
+	_Bool rt_change = 0;
+
 	FIB_WALK(&(table->fib), net, n) {
 
 		rte* oldroute;
@@ -648,9 +702,19 @@ void modify_routingtable_add(entry_data *ed) {
 					for (int i = 0; i < new_as_path_attr->num_of_new; i++) {
 						eattr * tmp_attr = new_as_path_attr->attrs+i;
 						rte * new_rte = copy_rte_and_insert_as_path(&oldroute, tmp_attr, proto, entry);
+
+						_Bool unique_route = is_unique_route(new_rte, table, ((u32 *) &n->n.addr[0].data) );
+
+						if (!unique_route) {
+							// if the route was not unique, we can delete it
+							rte_free(new_rte);
+							continue;
+						}
+
 						// flags to identify this route in rte_announce
 						new_rte->pflags = 0x99;
 						rte_update3(chl, &(n->n.addr), new_rte, chl->proto->main_source);
+						rt_change = 1;
 					}
 				}
 			}
