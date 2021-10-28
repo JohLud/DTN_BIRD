@@ -101,7 +101,7 @@ CF_DECLS
 %token <ip4> IP4
 %token <ip6> IP6
 %token <i64> VPN_RD
-%token <i64> DTNTIME
+%token <i64> DTNTIME		// Extension for DTN time configuration
 %token <s> CF_SYM_KNOWN CF_SYM_UNDEFINED
 %token <t> TEXT
 %type <iface> ipa_scope

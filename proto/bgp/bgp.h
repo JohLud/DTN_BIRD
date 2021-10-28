@@ -16,12 +16,11 @@
 #include "nest/bird.h"
 #include "nest/route.h"
 #include "nest/bfd.h"
-//#include "lib/lists.h"
 #include "lib/hash.h"
 #include "lib/socket.h"
-#include "conf/conf.h"	// extension?
-#include "nest/protocol.h" // extension
-//#include "sce_extension.h" // EXTENSION
+// Extension
+#include "conf/conf.h"
+#include "nest/protocol.h"
 
 struct linpool;
 struct eattr;

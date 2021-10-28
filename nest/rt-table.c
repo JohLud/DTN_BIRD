@@ -1092,6 +1092,7 @@ rte_recalculate(struct channel *c, net *net, rte *new, struct rte_src *src)
   rte **k;
   k = &net->routes;			/* Find and remove original route from the same protocol */
 
+  // Extension
   // do we want to delete a route because a scheduled contact ended?
   _Bool sce_withdraw = 0;
   /*
@@ -1181,7 +1182,7 @@ rte_recalculate(struct channel *c, net *net, rte *new, struct rte_src *src)
 	      return;
 	    }
 
-	  // we do not want to delete routes when a new route is learned via a sce
+	  // Extension: we do not want to delete routes when a new route is learned via a sce
 	  if (new) if (new->pflags == 0x99) break;
 
 	  *k = old->next;
@@ -1363,6 +1364,7 @@ rte_recalculate(struct channel *c, net *net, rte *new, struct rte_src *src)
       /* The fourth (empty) case - suboptimal route was removed, nothing to do */
     }
 
+  // Extension: new label
   after_recalculate:
 
   if (new)

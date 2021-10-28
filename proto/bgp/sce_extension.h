@@ -1,3 +1,22 @@
+/*
+ * The main header file where the BGP extension sits.
+ *
+ * Written by Johannes Ludwig as a part of
+ * the bachelor thesis at
+ * Technische Universität Dresden
+ * Faculty of Computer Science
+ * Chair of Computer Networks
+ * 2021
+ *
+ * The code contains Apache 2.0 licensed code from
+ * Stanislav Ovsiannikov.
+ * The author and the begin of the external code is
+ * mentioned at the section, where the code begins.
+ *
+ * Code changes in the BIRD source code are marked with
+ * a comment that declares the extended code.
+ */
+
 #ifndef _BIRD_SCE_EXTENSION_H_
 #define _BIRD_SCE_EXTENSION_H_
 
@@ -101,7 +120,7 @@ unsigned char * get_sces_cbor(unsigned int * data_size);
  * from https://github.com/naphaso/cbor-c .
  * The Code is licensed under the Apache License 2.0
  * URL to license: https://github.com/naphaso/cbor-c/blob/master/LICENSE
- * The code was not modified.
+ * The following code was not modified.
  */
 #define CBOR_TOKEN_TYPE_INT 1
 #define CBOR_TOKEN_TYPE_LONG 2

@@ -1,3 +1,26 @@
+/*
+ * The main source file where the BGP extension sits.
+ * Here we calculate new paths, set timers, save and
+ * load scheduled contact entries to/from the filesystem
+ * and trigger route deletions.
+ *
+ * Written by Johannes Ludwig as a part of
+ * the bachelor thesis at
+ * Technische Universität Dresden
+ * Faculty of Computer Science
+ * Chair of Computer Networks
+ * 2021
+ *
+ * The code contains Apache 2.0 licensed code from
+ * Stanislav Ovsiannikov.
+ * The author and the begin of the external code is
+ * mentioned at the section, where the code begins.
+ *
+ * Code changes in the BIRD source code are marked with
+ * a comment that declares the extended code.
+ */
+
+
 #include <stdio.h>
 #include <sys/stat.h>
 #include <time.h>
@@ -35,7 +58,6 @@ eattr * build_attr(u32 * as_path, u8 sizeofpath) {
 		pos++;
 	}
 
-	// these attributes were observed
 	new_attr->id = 770;
 	new_attr->flags = 0x40;
 	new_attr->type = 6;
@@ -105,8 +127,6 @@ eattr * merge_head_tail(u32 * as_path1, u8 pos1, u32 * as_path2, u8 pos2, u8 len
 	}
 
 	eattr * new_attr = build_attr(new_as_path, pos);
-
-	// TODO: free aspath1 and aspath2
 
 	return new_attr;
 }
@@ -479,17 +499,6 @@ struct eattr * get_as_path_attr(rte * route) {
 	return as_path_attr;
 }
 
-/**
- * Print route (rte) attributes.
- *
- * @r: the route
- *
- * This is not used and only was used for debugging reasons.
- */
-void print_rte_infos(rte * r) {
-	log(L_INFO "RTE INFOS: id: %u, flags: %x, pflags: %x, pref: %x, u.krt.src: %x, u.krt.proto: %x, u.krt.seen: %x, u.krt.best: %x, u.krt.metric: %x",
-			r->id, r->flags, r->pflags, r->pref, r->u.krt.src, r->u.krt.proto, r->u.krt.seen, r->u.krt.best, r->u.krt.metric );
-}
 
 /**
  * Find a neighbor / next_hop struct for a gateway.
@@ -520,8 +529,6 @@ void add_next_hop(rta * att, struct bgp_proto * p, scheduled_contact_entry * ent
 	att->dest = RTD_UNICAST;
 	att->nh.gw = neigh->addr;
 	att->nh.iface = neigh->iface;
-
-//	att->eattrs = add_nexthop_attribute(&att->nh, att->eattrs);
 }
 
 /**
@@ -570,9 +577,6 @@ rte * copy_rte_and_insert_as_path(rte ** rt, struct eattr * new_as_path, struct 
 	new_rta->eattrs = eal_new;
 	new_rta->dest = RTD_UNICAST;
 	new_rta->igp_metric = old_rta->igp_metric;
-//--
-	// later rta_free(s->cached_rta);
-	// 1360
 	new_rta->src = old_rta->src;
 
 	ea_list * neal = new_rta->eattrs;
@@ -583,8 +587,6 @@ rte * copy_rte_and_insert_as_path(rte ** rt, struct eattr * new_as_path, struct 
 	nrt->pflags = 0;
 	nrt->u.bgp.suppressed = 0;
 	nrt->u.bgp.stale = -1;
-
-//	nrt->next = *rt;
 
 	if (needs_new_nh) {
 		add_next_hop( nrta, p, entry );
@@ -669,10 +671,9 @@ _Bool is_unique_route(rte * rt, rtable * table, u32 * ipv4_address) {
  *
  * @ed: entry_data struct that contains various informations needed for this process.
  */
-
 void modify_routingtable_add(entry_data *ed) {
 
-	// get table and sce and chek if exists
+	// get table and sce and check if exists
 	struct bgp_proto * proto = ed->proto;
 	u32 mypublicasn = proto->public_as;
 
@@ -792,8 +793,6 @@ void modify_routingtable_remove(entry_data *ed) {
 	FIB_WALK_END;
 }
 
-
-
 /*
  * Timer Registration
  */
@@ -849,8 +848,6 @@ timer * register_timer(void (*hook)(struct timer *),
 	u64 firetime = convert_unixtime_to_secfromnow(when);
 	timer * tm = tm_new_init(NULL, hook, edata, 0, 0);
 
-//	only for testing purposes:
-//	tm_start(tm, when*1000000);
 	tm_start(tm, firetime*1000);
 	return tm;
 }
@@ -891,8 +888,6 @@ contact_end(timer *t) {
 	// release resources
 	tm_stop(t);
 	rfree(t);
-	// should also remove the entry t->data from the sces file
-	// TODO: something like:	delete_sce(t->data) which deletes the sce in sces.bin
 }
 
 /**
@@ -910,9 +905,7 @@ u64 convert_unixtime_to_secfromnow(u64 relative_time) {
  * Handling, saving, registering scheduled contact entries
  */
 
-
-/**
- * Stores an sce struct in a file pointed by fd.
+/* Stores an sce struct in a file pointed by fd.
  * The struct's raw bytes are stored.
  *
  * @fd: pointer to a file descriptor
@@ -967,13 +960,6 @@ void store_sces(scheduled_contact_entries *entries, struct channel *c, struct bg
 	}
 
 	fclose(fd);
-
-	// not freed because the sces are referenced in the timer data structure
-	// TODO: does this make sense since sces only points to sce?
-
-//	free(entries);
-//	if (existing_sces) free(existing_sces);
-//	if (all_sces) free(all_sces);
 }
 
 /**
@@ -1060,8 +1046,6 @@ scheduled_contact_entries * find_new_sces(scheduled_contact_entries * new, sched
 		}
 	}
 
-	// TODO: check existing and remove sces that are not valid anymore
-
 	scheduled_contact_entries * entries = malloc(sizeof(scheduled_contact_entries));
 	entries->number_of_entries = num_of_new;
 	entries->entries = entry_array;
@@ -1132,7 +1116,6 @@ scheduled_contact_entries * merge_sces(scheduled_contact_entries *entries1, sche
 	 * check if the duplicate entry is inserted
 	 * This presupposes that there are no duplicates in entry1
 	 */
-	// TODO: Pass value and assign to dereferenced pointer and not pointer to pointer
 	int index = 0;
 	for (int i = 0; i < entries1->number_of_entries; i++) {
 		*(entry_array+i) = *(entries1->entries+i);
@@ -1148,14 +1131,12 @@ scheduled_contact_entries * merge_sces(scheduled_contact_entries *entries1, sche
 			if (check_equal_sces(e1, e2)) duplicate = 1;	// if signature of entry1 & entry2 is identical --> duplicate --> entry2 not added
 		}
 		if (!duplicate) {
-			// FIX assignment
 			*(entry_array+index) = *(entries2->entries+i);
 			index++;
 		}
 	}
 	entries->number_of_entries = num_of_entries;
 	entries->entries = entry_array;
-	// TODO: free entries1 and entries2?
 
 	return entries;
 }
@@ -1246,8 +1227,6 @@ unsigned int cbor_read_token(unsigned char *data, unsigned int size, unsigned in
     unsigned int length = 0;
 
     unsigned int remaining = size - current_offset;
-
-    //printf("size %u, offset %u, remaining %u, major type %d, minor type %d\n", size, offset, remaining, majorType, minorType);
 
     switch(majorType) {
         case 0: // positive integer

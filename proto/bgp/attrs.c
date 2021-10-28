@@ -965,6 +965,7 @@ bgp_format_mpls_label_stack(const eattr *a, byte *buf, uint size)
 
 
 /**
+ * Extension
  * Load the scheduled contact entries and add them to @buf.
  */
 static int
@@ -991,6 +992,7 @@ bgp_encode_scheduled(struct bgp_write_state *s, eattr *a, byte *buf, uint size)
 }
 
 /**
+ * Extension
  * Decode scheduled contact entries and hand them over to sce_extension.c.
  */
 static void
@@ -1064,13 +1066,6 @@ bgp_decode_scheduled(struct bgp_parse_state *s, uint code, uint flags, byte *dat
 	  }
 	}
 	store_sces(entries, &(bgp_ch->c), s->proto);
-}
-
-static void
-bgp_export_scheduled(struct bgp_export_state *s, eattr *a)
-{
-	log(L_INFO "attrs.c 1060: Export is called.");
-	a->u.ptr = lc_set_sort(s->pool, a->u.ptr);
 }
 
 static inline void
@@ -1225,16 +1220,15 @@ static const struct bgp_attr_desc bgp_attr_table[] = {
     .decode = bgp_decode_mpls_label_stack,
     .format = bgp_format_mpls_label_stack,
   },
-  // extension for BGP DLT scheduled contact attribute (2 commented out, because not important for the moment)
+  // Extension
+  // for BGP DLT scheduled contact attribute (2 commented out, because not important for the moment)
   // has id 0x99
   [BA_SCHEDULED] = {
 	.name = "scheduled",
 	.type = EAF_TYPE_SCHEDULED,
 	.flags = BAF_OPTIONAL | BAF_TRANSITIVE,  // flags: 1 1 0 0 --> 0xC0
-	.export = bgp_export_scheduled,
 	.encode = bgp_encode_scheduled,
 	.decode = bgp_decode_scheduled,
-//	.format = bgp_format_scheduled,
   },
 };
 
@@ -1331,7 +1325,7 @@ bgp_export_attrs(struct bgp_export_state *s, ea_list *attrs)
 
 static inline int
 bgp_encode_attr(struct bgp_write_state *s, eattr *a, byte *buf, uint size)
-{ // Assertation extended by our custom attribute BA_SCHEDULED with the code/id 0x99
+{ // Extension: Assertation extended by the new custom attribute BA_SCHEDULED with the code/id 0x99
   ASSERT(EA_PROTO(a->id) == PROTOCOL_BGP || a->id == BA_SCHEDULED);
 
   uint code = EA_ID(a->id);
@@ -1370,7 +1364,7 @@ bgp_encode_attrs(struct bgp_write_state *s, ea_list *attrs, byte *buf, byte *end
 
     pos += len;
   }
-  // own extension
+  // Extension
   // add the scheduled contact entry attribute to the UPDATE message
   eattr *myattr = malloc(sizeof(eattr));
   myattr->id = 0x99; // id of scheduled attribute
@@ -1972,6 +1966,7 @@ bgp_rt_notify(struct proto *P, struct channel *C, net *n, rte *new, rte *old)
   u32 path;
 
   /*
+   * Extension
    * If we encounter the marker 0x55 in any route, this announcement
    * originated from the extension because of a route deletion.
    * Therefore we do not want that this results in an UPDATE, so we return.
@@ -1984,8 +1979,8 @@ bgp_rt_notify(struct proto *P, struct channel *C, net *n, rte *new, rte *old)
   if (new)
   {
 
-	// If we encounter a route with pflags = 0x99, this route was learned by a scheduled contact entry.
-	// Therefore we return, because we do not want that the this route is announced with an update.
+	// If we encounter a route with pflags = 0x99, this is a new route learned by a scheduled contact entry.
+	// Therefore we return, because we do not want that this route is announced with an update.
 	if (new->pflags == 0x99) return;
 
     struct ea_list *attrs = bgp_update_attrs(p, c, new, new->attrs->eattrs, bgp_linpool2);

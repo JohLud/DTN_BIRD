@@ -438,17 +438,6 @@ bgp_write_capabilities(struct bgp_conn *conn, byte *buf)
     data[-1] = buf - data;
   }
 
-  /*
-   * Extension for BGP DLT support
-   * later it has to be integrated clean into the capabilities list
-   */
-  *buf++ = 99;
-  *buf++ = 0;
-
-  /*
-   * End of extension
-   */
-
   caps->length = buf - buf_head;
 
   return buf;
@@ -626,20 +615,8 @@ bgp_read_capabilities(struct bgp_conn *conn, byte *pos, int len)
       caps->hostname = hostname;
 
       /* We can safely ignore all other capabilities */
-      // my insertion:
       break;
-      /*
-       * Extension BGP DLT
-       * read extension 99 that marks support for DLT
-       */
-    case 99:
-    	// later update caps->dlt = 1;
-    	break;
     }
-    /*
-     * End of extension
-     */
-
     ADVANCE(pos, len, 2 + cl);
   }
 

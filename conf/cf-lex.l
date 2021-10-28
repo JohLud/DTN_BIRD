@@ -277,6 +277,7 @@ WHITE [ \t]
   unsigned long int l;
   errno = 0;
   l = bstrtoul10(yytext, &e);
+  // Extension to allow 64 bit integers / DTNTIME is an u64 token
   if (!e || *e || errno == ERANGE || (u64) l != l)
     cf_error("Number out of range");
   cf_lval.i = l;
