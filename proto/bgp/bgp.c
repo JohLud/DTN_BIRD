@@ -123,6 +123,7 @@
 #include "lib/string.h"
 
 #include "bgp.h"
+#include <string.h>
 
 
 struct linpool *bgp_linpool;		/* Global temporary pool */
@@ -1724,19 +1725,15 @@ bgp_init(struct proto_config *CF)
   if (CF->global->sces) {
 	  scheduled_contact_entries * entries = CF->global->sces;
 
-	  // TODO: Only the first channel is taken "ipv4" that is later changed to "master4".
-	  // PROBLEM: order in config does play a role, if ipv6 is configured earlier, we get master6 table
-	  // so we have to ensure, that we get ipv4 (master4). (If we don't want dual stack and only ipv4)
-	  /*
-	   * FIX: search with afi = BGP_AF_IPV4
-	   * struct bgp_channel *c = bgp_get_channel(s->proto, afi);
-	   */
-	  struct channel * ch = HEAD(P->channels);
-	  if (ch) {
+	  // searches the IPv4 channel
+	  struct channel * ch;
+	  WALK_LIST(ch, P->channels)
+	  	  if ( strcmp(ch->name, "ipv4") == 0 ) break;
+
+	  if ( strcmp(ch->name, "ipv4") == 0 ) {
 		  store_sces(entries, ch, p);
 	  } else {
-		  log(L_INFO "bgc.c 1732: Channel not found");
-		  store_sces(entries, NULL, p);
+		  log(L_INFO "bgc.c 1732: IPv4 channel not found.");
 	  }
   }
 

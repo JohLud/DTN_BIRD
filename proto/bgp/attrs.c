@@ -1057,14 +1057,16 @@ bgp_decode_scheduled(struct bgp_parse_state *s, uint code, uint flags, byte *dat
 	        }
 		}
 
-	struct bgp_channel * bgp_ch;	// = bgp_get_channel(s->proto, BGP_AF_IPV4);
-
+	// searches the IPv4 channel
+	struct bgp_channel * bgp_ch;
 	uint i;
 	for (i = 0; i < s->proto->channel_count; i++) {
 	  if (s->proto->afi_map[i] == BGP_AF_IPV4) {
 	  	bgp_ch = s->proto->channel_map[i];
+	  	break;
 	  }
 	}
+
 	store_sces(entries, &(bgp_ch->c), s->proto);
 }
 
